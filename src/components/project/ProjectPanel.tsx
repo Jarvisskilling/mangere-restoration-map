@@ -138,9 +138,9 @@ export default function ProjectPanel({
 
   const [confirmDelete, setConfirmDelete] = useState(false)
   const storyRef = useRef<HTMLTextAreaElement>(null)
-  const autoSaveRef = useRef<ReturnType<typeof setTimeout>>()
-  const descAutoSave = useRef<ReturnType<typeof setTimeout>>()
-  const contactAutoSave = useRef<ReturnType<typeof setTimeout>>()
+  const autoSaveRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
+  const descAutoSave = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
+  const contactAutoSave = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
 
   const isOwner = project.created_by === userId
 

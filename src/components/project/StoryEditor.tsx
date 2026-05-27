@@ -21,7 +21,7 @@ export default function StoryEditor({ projectId, userId, canEdit }: StoryEditorP
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
-  const autoSaveTimer = useRef<ReturnType<typeof setTimeout>>()
+  const autoSaveTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
 
   useEffect(() => {
     fetchProjectStory(projectId).then(story => {

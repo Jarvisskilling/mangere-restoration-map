@@ -453,21 +453,24 @@ export default function ProjectPanel({
               )}
             </div>
 
-            <div className="relative">
-              <label className="block text-[9px] uppercase tracking-[0.14em] text-white/22 font-medium mb-2">Contact</label>
-              <input
-                type="text"
-                value={contact}
-                onChange={e => handleContactChange(e.target.value)}
-                placeholder="Name, email, or phone…"
-                readOnly={!isOwner}
-                className={`w-full rounded-xl text-sm text-white/70 placeholder-white/15 outline-none transition-all duration-200 px-4 py-2.5 ${
-                  isOwner
-                    ? 'bg-white/[0.03] border border-white/6 focus:bg-white/[0.05] focus:border-white/12'
-                    : 'bg-transparent border border-white/4 cursor-default'
-                }`}
-              />
-            </div>
+            {(isOwner || contact) && (
+              <div className="relative">
+                <label className="block text-[9px] uppercase tracking-[0.14em] text-white/22 font-medium mb-2">Contact</label>
+                <input
+                  type="text"
+                  value={contact}
+                  onChange={e => handleContactChange(e.target.value)}
+                  placeholder="Name, email, or phone…"
+                  readOnly={!isOwner}
+                  className={`w-full rounded-xl text-sm text-white/70 placeholder-white/15 outline-none transition-all duration-200 px-4 py-2.5 ${
+                    isOwner
+                      ? 'bg-white/[0.03] border border-white/6 focus:bg-white/[0.05] focus:border-white/12'
+                      : 'bg-transparent border border-white/4 cursor-default'
+                  }`}
+                />
+                {!isOwner && <p className="mt-1.5 text-[9px] text-white/18">Project contact</p>}
+              </div>
+            )}
           </div>
         </div>
 
@@ -608,19 +611,22 @@ export default function ProjectPanel({
         {/* ── STORY ── */}
         <div className="px-6 pb-10">
           <SectionLabel>Story</SectionLabel>
+          <p className="text-[10px] text-white/25 mb-3 leading-relaxed">
+            Anyone in the community can contribute to this shared story.
+          </p>
           <textarea
             ref={storyRef}
             value={story}
             onChange={e => handleStoryChange(e.target.value)}
             placeholder="Tell the story of this place — how it began, what's been planted, wildlife returning, community that shaped it…"
-            readOnly={!isOwner}
+            readOnly={!isAuthenticated}
             className={`w-full min-h-[140px] resize-none rounded-2xl text-sm text-white/70 placeholder-white/12 outline-none leading-relaxed transition-all duration-200 px-4 py-3.5 ${
-              isOwner
+              isAuthenticated
                 ? 'bg-white/[0.03] border border-white/6 focus:bg-white/[0.05] focus:border-white/12'
                 : 'bg-transparent border border-white/4 cursor-default'
             }`}
           />
-          {isOwner && <p className="mt-2 text-[9px] text-white/18 tracking-wide">Auto-saves as you type</p>}
+          {isAuthenticated && <p className="mt-2 text-[9px] text-white/18 tracking-wide">Auto-saves as you type</p>}
         </div>
       </div>
 

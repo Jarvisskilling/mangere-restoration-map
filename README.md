@@ -171,3 +171,4 @@ All tables have Row Level Security:
 - Public read on everything
 - Authenticated write; creators can edit/delete their own records
 # mangere-restoration-map
+# mangere-restoration-map

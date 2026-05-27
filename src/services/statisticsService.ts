@@ -12,14 +12,14 @@ export async function fetchStatistics(): Promise<Statistics | null> {
   return data
 }
 
-export async function fetchProjectStory(projectId: string) {
+export async function fetchProjectStory(projectId: string): Promise<{ content: string } | null> {
   const supabase = createClient()
   const { data } = await supabase
     .from('project_stories')
-    .select('*')
+    .select('content')
     .eq('project_id', projectId)
     .single()
-  return data
+  return data as { content: string } | null
 }
 
 export async function upsertProjectStory(

@@ -2,8 +2,8 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react'
 import {
-  X, Check, Calendar, FileText, Trash2, Tag, Bell, BellOff,
-  Users, TreePine, Clock, MapPin, Eye, Plus, ChevronDown, ChevronUp, Pencil,
+  X, Check, Trash2, Bell, BellOff,
+  Users, TreePine, Clock, MapPin, Eye, Plus, ChevronDown, Pencil,
 } from 'lucide-react'
 import FullCalendar from '@fullcalendar/react'
 import dayGridPlugin from '@fullcalendar/daygrid'
@@ -49,17 +49,18 @@ interface EventForm {
   allDay: boolean
 }
 const EMPTY_EVENT: EventForm = { title: '', eventType: 'planting', allDay: true }
-
 const today = new Date().toISOString().slice(0, 10)
 
-function StatBox({
-  icon, label, value, editable, onChange,
+// ── Stat card ─────────────────────────────────────────────────────────────────
+function StatCard({
+  icon, label, value, editable, onChange, accent,
 }: {
   icon: React.ReactNode
   label: string
   value: number | string
   editable?: boolean
   onChange?: (v: number) => void
+  accent?: string
 }) {
   const [editing, setEditing] = useState(false)
   const [draft, setDraft] = useState(String(value))
@@ -70,44 +71,55 @@ function StatBox({
     if (!isNaN(n) && n !== Number(value)) onChange?.(n)
   }
 
-  if (editable && editing) {
-    return (
-      <div className="flex flex-col items-center gap-1">
-        <div className="text-white/30">{icon}</div>
-        <input
-          autoFocus
-          type="number"
-          value={draft}
-          onChange={e => setDraft(e.target.value)}
-          onBlur={commit}
-          onKeyDown={e => { if (e.key === 'Enter') commit(); if (e.key === 'Escape') setEditing(false) }}
-          className="w-16 bg-white/10 border border-green-500/40 rounded px-1 py-0.5 text-center text-sm text-white outline-none"
-        />
-        <span className="text-[10px] text-white/30">{label}</span>
-      </div>
-    )
-  }
-
   return (
-    <button
-      className={`flex flex-col items-center gap-1 ${editable ? 'cursor-pointer hover:opacity-80' : 'cursor-default'}`}
-      onClick={() => { if (editable) { setDraft(String(value)); setEditing(true) } }}
-      title={editable ? `Click to edit ${label}` : undefined}
+    <div
+      className={`relative group rounded-2xl border p-4 transition-all duration-300 overflow-hidden ${
+        editable
+          ? 'border-white/8 bg-white/[0.03] hover:bg-white/[0.05] hover:border-white/12 cursor-pointer hover:-translate-y-0.5 hover:shadow-glass'
+          : 'border-white/6 bg-white/[0.02]'
+      }`}
+      onClick={() => { if (editable && !editing) { setDraft(String(value)); setEditing(true) } }}
     >
-      <div className="text-white/30">{icon}</div>
-      <span className="text-base font-bold text-white">{Number(value).toLocaleString()}</span>
-      <span className="text-[10px] text-white/30">{label}</span>
-    </button>
+      {editable && (
+        <div
+          className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none"
+          style={{ background: `radial-gradient(circle at 50% 100%, ${accent ?? 'rgba(74,222,128,0.06)'} 0%, transparent 70%)` }}
+        />
+      )}
+      <div className="relative flex flex-col gap-3">
+        <div className="text-white/20">{icon}</div>
+        {editing ? (
+          <input
+            autoFocus
+            type="number"
+            value={draft}
+            onChange={e => setDraft(e.target.value)}
+            onBlur={commit}
+            onKeyDown={e => { if (e.key === 'Enter') commit(); if (e.key === 'Escape') setEditing(false) }}
+            className="w-full bg-transparent border-b border-green-500/40 text-2xl font-bold text-white outline-none tabular-nums pb-0.5"
+            onClick={e => e.stopPropagation()}
+          />
+        ) : (
+          <span className="text-2xl font-bold text-white tracking-tight tabular-nums leading-none">
+            {Number(value).toLocaleString()}
+          </span>
+        )}
+        <span className="text-[9px] uppercase tracking-[0.14em] text-white/25 font-medium">{label}</span>
+      </div>
+    </div>
   )
 }
 
+// ── Section label ─────────────────────────────────────────────────────────────
+function SectionLabel({ children }: { children: React.ReactNode }) {
+  return (
+    <p className="text-[9px] uppercase tracking-[0.18em] font-semibold text-white/25 mb-4">{children}</p>
+  )
+}
+
+// ── Main panel ────────────────────────────────────────────────────────────────
 export default function ProjectPanel({
-  project,
-  onClose,
-  onProjectUpdate,
-  onProjectDelete,
-  userId,
-  isAuthenticated,
+  project, onClose, onProjectUpdate, onProjectDelete, userId, isAuthenticated,
 }: ProjectPanelProps) {
   const [name, setName] = useState(project.name)
   const [projectType, setProjectType] = useState<ProjectType>(project.project_type)
@@ -122,26 +134,22 @@ export default function ProjectPanel({
   const [isFollowing, setIsFollowing] = useState(false)
   const [followLoading, setFollowLoading] = useState(false)
   const [showPastEvents, setShowPastEvents] = useState(false)
-
-  // Event form
   const [showEventForm, setShowEventForm] = useState(false)
   const [eventForm, setEventForm] = useState<EventForm>(EMPTY_EVENT)
   const [selectedDate, setSelectedDate] = useState('')
   const [editingEventId, setEditingEventId] = useState<string | null>(null)
   const [savingEvent, setSavingEvent] = useState(false)
-
-  // Observation form
   const [showObsForm, setShowObsForm] = useState(false)
   const [obsContent, setObsContent] = useState('')
   const [obsDate, setObsDate] = useState(today)
   const [savingObs, setSavingObs] = useState(false)
-
   const [confirmDelete, setConfirmDelete] = useState(false)
+  const [descSaved, setDescSaved] = useState(true)
+
   const storyRef = useRef<HTMLTextAreaElement>(null)
   const autoSaveRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
   const descAutoSave = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
   const contactAutoSave = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
-
   const isOwner = project.created_by === userId
 
   useEffect(() => {
@@ -163,18 +171,17 @@ export default function ProjectPanel({
     setStory(val)
     clearTimeout(autoSaveRef.current)
     autoSaveRef.current = setTimeout(async () => {
-      try { await upsertProjectStory(project.id, val, userId) }
-      catch { toast.error('Failed to save story') }
+      try { await upsertProjectStory(project.id, val, userId) } catch { toast.error('Failed to save') }
     }, 1500)
   }
 
   const handleDescriptionChange = (val: string) => {
-    setDescription(val)
+    setDescription(val); setDescSaved(false)
     clearTimeout(descAutoSave.current)
     descAutoSave.current = setTimeout(async () => {
       try {
         const updated = await updateProject(project.id, { description: val || null })
-        onProjectUpdate(updated)
+        onProjectUpdate(updated); setDescSaved(true)
       } catch { toast.error('Failed to save description') }
     }, 1500)
   }
@@ -200,28 +207,22 @@ export default function ProjectPanel({
 
   const handleTypeChange = async (type: ProjectType) => {
     if (type === projectType) return
-    const prevType = projectType
-    const prevName = name
+    const prevType = projectType; const prevName = name
     setProjectType(type)
     const isDefaultName = Object.values(PROJECT_TYPE_DEFAULT_NAMES).includes(name)
     const newName = isDefaultName ? PROJECT_TYPE_DEFAULT_NAMES[type] : name
     if (isDefaultName) setName(newName)
     try {
-      const updated = await updateProject(project.id, {
-        project_type: type,
-        ...(isDefaultName ? { name: newName } : {}),
-      })
+      const updated = await updateProject(project.id, { project_type: type, ...(isDefaultName ? { name: newName } : {}) })
       onProjectUpdate(updated)
     } catch {
-      toast.error('Failed to update type')
-      setProjectType(prevType)
+      toast.error('Failed to update type'); setProjectType(prevType)
       if (isDefaultName) setName(prevName)
     }
   }
 
   const handleStatUpdate = async (field: 'trees_planted' | 'volunteer_hours', val: number) => {
-    if (field === 'trees_planted') setTrees(val)
-    else setHours(val)
+    if (field === 'trees_planted') setTrees(val); else setHours(val)
     try {
       const updated = await updateProject(project.id, { [field]: val } as Parameters<typeof updateProject>[1])
       onProjectUpdate(updated)
@@ -233,41 +234,25 @@ export default function ProjectPanel({
     setFollowLoading(true)
     try {
       if (isFollowing) {
-        await unfollowProject(project.id, userId)
-        setIsFollowing(false)
-        setFollowerCount(c => Math.max(0, c - 1))
+        await unfollowProject(project.id, userId); setIsFollowing(false); setFollowerCount(c => Math.max(0, c - 1))
         toast('Unfollowed', { icon: '👋' })
       } else {
-        await followProject(project.id, userId)
-        setIsFollowing(true)
-        setFollowerCount(c => c + 1)
+        await followProject(project.id, userId); setIsFollowing(true); setFollowerCount(c => c + 1)
         toast.success("Following — you'll be notified when events are added")
       }
-    } catch { toast.error('Failed to update follow') }
-    finally { setFollowLoading(false) }
+    } catch { toast.error('Failed') } finally { setFollowLoading(false) }
   }
 
   const handleDelete = async () => {
     try {
-      await deleteProject(project.id)
-      onProjectDelete(project.id)
-      onClose()
-      toast.success('Site deleted')
+      await deleteProject(project.id); onProjectDelete(project.id); onClose(); toast.success('Site deleted')
     } catch { toast.error('Failed to delete') }
   }
 
-  const openNewEvent = () => {
-    setEditingEventId(null)
-    setSelectedDate('')
-    setEventForm(EMPTY_EVENT)
-    setShowEventForm(true)
-  }
-
+  const openNewEvent = () => { setEditingEventId(null); setSelectedDate(''); setEventForm(EMPTY_EVENT); setShowEventForm(true) }
   const openEditEvent = useCallback((evt: ProjectEvent) => {
-    setEditingEventId(evt.id)
-    setSelectedDate(evt.start_date.slice(0, 10))
-    setEventForm({ title: evt.title, eventType: evt.event_type, allDay: evt.all_day })
-    setShowEventForm(true)
+    setEditingEventId(evt.id); setSelectedDate(evt.start_date.slice(0, 10))
+    setEventForm({ title: evt.title, eventType: evt.event_type, allDay: evt.all_day }); setShowEventForm(true)
   }, [])
 
   const handleSaveEvent = async () => {
@@ -276,40 +261,21 @@ export default function ProjectPanel({
     const start_date = `${selectedDate}T${eventForm.allDay ? '00:00:00' : '09:00:00'}`
     try {
       if (editingEventId) {
-        const updated = await updateProjectEvent(editingEventId, {
-          title: eventForm.title,
-          start_date,
-          event_type: eventForm.eventType,
-          all_day: eventForm.allDay,
-          color: EVENT_TYPE_COLORS[eventForm.eventType],
-        })
-        setEvents(prev => prev.map(e => e.id === updated.id ? updated : e))
-        toast.success('Event updated')
+        const updated = await updateProjectEvent(editingEventId, { title: eventForm.title, start_date, event_type: eventForm.eventType, all_day: eventForm.allDay, color: EVENT_TYPE_COLORS[eventForm.eventType] })
+        setEvents(prev => prev.map(e => e.id === updated.id ? updated : e)); toast.success('Event updated')
       } else {
-        const created = await createProjectEvent({
-          project_id: project.id,
-          title: eventForm.title,
-          start_date,
-          event_type: eventForm.eventType,
-          all_day: eventForm.allDay,
-          color: EVENT_TYPE_COLORS[eventForm.eventType],
-          created_by: userId,
-        })
-        setEvents(prev => [...prev, created])
-        toast.success('Event added')
+        const created = await createProjectEvent({ project_id: project.id, title: eventForm.title, start_date, event_type: eventForm.eventType, all_day: eventForm.allDay, color: EVENT_TYPE_COLORS[eventForm.eventType], created_by: userId })
+        setEvents(prev => [...prev, created]); toast.success('Event added')
       }
       setShowEventForm(false)
-    } catch { toast.error('Failed to save event') }
-    finally { setSavingEvent(false) }
+    } catch { toast.error('Failed to save event') } finally { setSavingEvent(false) }
   }
 
   const handleDeleteEvent = async () => {
     if (!editingEventId) return
     try {
-      await deleteProjectEvent(editingEventId)
-      setEvents(prev => prev.filter(e => e.id !== editingEventId))
-      setShowEventForm(false)
-      toast.success('Event removed')
+      await deleteProjectEvent(editingEventId); setEvents(prev => prev.filter(e => e.id !== editingEventId))
+      setShowEventForm(false); toast.success('Event removed')
     } catch { toast.error('Failed to delete event') }
   }
 
@@ -317,135 +283,120 @@ export default function ProjectPanel({
     if (!obsContent.trim()) return
     setSavingObs(true)
     try {
-      const created = await createProjectObservation({
-        project_id: project.id,
-        content: obsContent.trim(),
-        observed_at: obsDate,
-        created_by: userId,
-      })
-      setObservations(prev => [created, ...prev])
-      setObsContent('')
-      setObsDate(today)
-      setShowObsForm(false)
+      const created = await createProjectObservation({ project_id: project.id, content: obsContent.trim(), observed_at: obsDate, created_by: userId })
+      setObservations(prev => [created, ...prev]); setObsContent(''); setObsDate(today); setShowObsForm(false)
       toast.success('Observation recorded')
-    } catch { toast.error('Failed to save observation') }
-    finally { setSavingObs(false) }
+    } catch { toast.error('Failed to save') } finally { setSavingObs(false) }
   }
 
   const handleDeleteObservation = async (id: string) => {
-    try {
-      await deleteProjectObservation(id)
-      setObservations(prev => prev.filter(o => o.id !== id))
-    } catch { toast.error('Failed to delete') }
+    try { await deleteProjectObservation(id); setObservations(prev => prev.filter(o => o.id !== id)) }
+    catch { toast.error('Failed to delete') }
   }
 
-  const upcomingEvents = events
-    .filter(e => e.start_date.slice(0, 10) >= today)
-    .sort((a, b) => a.start_date.localeCompare(b.start_date))
-
-  const pastEvents = events
-    .filter(e => e.start_date.slice(0, 10) < today)
-    .sort((a, b) => b.start_date.localeCompare(a.start_date))
-
-  const fcEvents = events.map(e => ({
-    id: e.id,
-    title: e.title,
-    start: e.start_date,
-    end: e.end_date ?? undefined,
-    allDay: e.all_day,
-    backgroundColor: e.color ?? EVENT_TYPE_COLORS[e.event_type],
-    borderColor: 'transparent',
-    extendedProps: e,
-  }))
+  const upcomingEvents = events.filter(e => e.start_date.slice(0, 10) >= today).sort((a, b) => a.start_date.localeCompare(b.start_date))
+  const pastEvents = events.filter(e => e.start_date.slice(0, 10) < today).sort((a, b) => b.start_date.localeCompare(a.start_date))
+  const fcEvents = events.map(e => ({ id: e.id, title: e.title, start: e.start_date, end: e.end_date ?? undefined, allDay: e.all_day, backgroundColor: e.color ?? EVENT_TYPE_COLORS[e.event_type], borderColor: 'transparent', extendedProps: e }))
 
   return (
     <>
-      <div className="fixed inset-0 z-[1400] bg-black/50 backdrop-blur-sm animate-fade-in" onClick={onClose} />
+      {/* Backdrop */}
+      <div className="fixed inset-0 z-[1400] animate-fade-in" onClick={onClose}
+        style={{ background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(6px)' }} />
 
-      <div className="fixed right-0 top-0 bottom-0 z-[1500] flex w-full flex-col bg-[#080808] border-l border-white/10 animate-slide-in-right sm:w-[500px] overflow-y-auto">
+      {/* Panel */}
+      <div className="fixed right-0 top-0 bottom-0 z-[1500] w-full sm:w-[520px] flex flex-col overflow-y-auto animate-slide-in-right"
+        style={{ background: 'linear-gradient(160deg, #060606 0%, #040404 100%)', borderLeft: '1px solid rgba(255,255,255,0.06)' }}>
 
-        {/* ── Header ── */}
-        <div className="sticky top-0 z-10 border-b border-white/8 bg-[#080808] px-5 py-4">
-          <div className="flex items-start gap-3">
-            <div className="flex-1 min-w-0">
+        {/* Ambient header glow */}
+        <div className="pointer-events-none absolute top-0 left-0 right-0 h-64 opacity-30"
+          style={{ background: `radial-gradient(ellipse at 30% 0%, ${PROJECT_TYPE_COLORS[projectType]}18 0%, transparent 70%)` }} />
+
+        {/* ── HEADER ── */}
+        <div className="sticky top-0 z-10 px-6 pt-7 pb-5"
+          style={{ background: 'linear-gradient(to bottom, #060606 60%, transparent 100%)' }}>
+          <div className="flex items-start justify-between gap-4">
+            <div className="flex-1 min-w-0 relative">
               <input
                 type="text"
                 value={name}
                 onChange={e => setName(e.target.value)}
                 onBlur={handleSaveName}
                 onKeyDown={e => { if (e.key === 'Enter') e.currentTarget.blur() }}
-                className="w-full bg-transparent text-base font-semibold text-white outline-none border-b border-transparent focus:border-green-500/40 transition-colors pb-0.5"
+                readOnly={!isOwner}
+                className="w-full bg-transparent text-[22px] font-semibold tracking-tight text-white outline-none placeholder-white/10 leading-snug border-b border-transparent focus:border-white/10 transition-colors pb-0.5"
                 placeholder="Site name…"
               />
-              <div className="flex items-center gap-2 mt-1">
-                <MapPin className="h-3 w-3 text-white/20" />
-                <p className="text-xs text-white/30">
-                  {project.latitude.toFixed(4)}, {project.longitude.toFixed(4)}
-                </p>
+              <div className="flex items-center gap-2 mt-2.5">
+                <MapPin className="h-3 w-3 shrink-0" style={{ color: PROJECT_TYPE_COLORS[projectType], opacity: 0.6 }} />
+                <span className="text-xs font-mono text-white/25 tracking-wider">
+                  {project.latitude.toFixed(5)}, {project.longitude.toFixed(5)}
+                </span>
                 {project.creator?.full_name && (
-                  <span className="text-xs text-white/20">· by {project.creator.full_name}</span>
+                  <span className="text-white/15 text-xs">· {project.creator.full_name}</span>
                 )}
               </div>
             </div>
 
-            <div className="flex items-center gap-1 shrink-0">
+            {/* Action buttons */}
+            <div className="flex items-center gap-1.5 shrink-0 mt-0.5">
               {isAuthenticated && (
                 <button
                   onClick={handleFollow}
                   disabled={followLoading}
-                  title={isFollowing ? 'Unfollow project' : 'Follow project'}
-                  className={`flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium transition-all ${
+                  title={isFollowing ? 'Unfollow' : 'Follow project'}
+                  className={`flex items-center gap-1.5 rounded-xl px-2.5 py-1.5 text-[11px] font-medium transition-all duration-200 border ${
                     isFollowing
-                      ? 'bg-green-500/15 text-green-400 hover:bg-red-500/10 hover:text-red-400'
-                      : 'bg-white/5 text-white/40 hover:bg-white/10 hover:text-white'
+                      ? 'border-green-500/25 bg-green-500/8 text-green-400 hover:bg-red-500/8 hover:border-red-500/20 hover:text-red-400'
+                      : 'border-white/8 bg-white/3 text-white/35 hover:bg-white/6 hover:text-white/60 hover:border-white/12'
                   }`}
                 >
-                  {isFollowing ? <BellOff className="h-3.5 w-3.5" /> : <Bell className="h-3.5 w-3.5" />}
+                  {isFollowing ? <BellOff className="h-3 w-3" /> : <Bell className="h-3 w-3" />}
                   {isFollowing ? 'Following' : 'Follow'}
-                  {followerCount > 0 && <span className="opacity-60">{followerCount}</span>}
+                  {followerCount > 0 && <span className="opacity-50 text-[10px]">{followerCount}</span>}
                 </button>
               )}
+
               {isOwner && !confirmDelete && (
-                <button
-                  onClick={() => setConfirmDelete(true)}
-                  className="p-2 text-white/20 hover:text-red-400 transition-colors rounded-lg hover:bg-white/5"
-                >
-                  <Trash2 className="h-4 w-4" />
+                <button onClick={() => setConfirmDelete(true)}
+                  className="h-8 w-8 rounded-xl border border-white/6 bg-white/[0.02] flex items-center justify-center text-white/20 hover:text-red-400 hover:bg-red-500/6 hover:border-red-500/15 transition-all duration-200">
+                  <Trash2 className="h-3.5 w-3.5" />
                 </button>
               )}
               {isOwner && confirmDelete && (
                 <div className="flex items-center gap-2 animate-fade-in">
-                  <span className="text-xs text-white/40">Delete?</span>
-                  <Button variant="danger" size="sm" onClick={handleDelete}>Yes</Button>
-                  <Button variant="ghost" size="sm" onClick={() => setConfirmDelete(false)}>No</Button>
+                  <span className="text-[11px] text-white/35">Delete site?</span>
+                  <button onClick={handleDelete} className="px-2.5 py-1 rounded-lg bg-red-500/15 border border-red-500/25 text-red-400 text-[11px] font-medium hover:bg-red-500/25 transition-all">Yes</button>
+                  <button onClick={() => setConfirmDelete(false)} className="px-2.5 py-1 rounded-lg border border-white/8 text-white/35 text-[11px] hover:text-white/60 transition-all">No</button>
                 </div>
               )}
-              <button onClick={onClose} className="p-2 text-white/30 hover:text-white transition-colors rounded-lg hover:bg-white/5">
-                <X className="h-4 w-4" />
+
+              <button onClick={onClose}
+                className="h-8 w-8 rounded-xl border border-white/6 bg-white/[0.02] flex items-center justify-center text-white/25 hover:text-white hover:bg-white/6 hover:border-white/10 transition-all duration-200">
+                <X className="h-3.5 w-3.5" />
               </button>
             </div>
           </div>
         </div>
 
-        {/* ── Type pills ── */}
-        <div className="px-5 py-4 border-b border-white/8">
-          <div className="flex items-center gap-2 mb-3 text-xs font-medium text-white/40 uppercase tracking-wider">
-            <Tag className="h-3.5 w-3.5" />
-            Site type
-          </div>
+        {/* ── SITE TYPE ── */}
+        <div className="px-6 pb-6">
+          <SectionLabel>Site type</SectionLabel>
           <div className="flex flex-wrap gap-2">
             {(Object.keys(PROJECT_TYPE_LABELS) as ProjectType[]).map(type => {
               const active = type === projectType
+              const color = PROJECT_TYPE_COLORS[type]
               return (
                 <button
                   key={type}
                   onClick={() => isOwner && handleTypeChange(type)}
-                  className={`px-3 py-1.5 rounded-full text-xs font-medium transition-all border ${
-                    active
-                      ? 'border-transparent text-black'
-                      : 'border-white/10 text-white/40 hover:text-white/70 hover:border-white/20'
-                  } ${!isOwner ? 'cursor-default' : ''}`}
-                  style={active ? { backgroundColor: PROJECT_TYPE_COLORS[type] } : {}}
+                  className={`px-3.5 py-1.5 rounded-full text-[11px] font-medium transition-all duration-200 border ${
+                    active ? 'border-transparent text-black' : 'border-white/8 text-white/30 hover:text-white/55 hover:border-white/14'
+                  } ${!isOwner ? 'cursor-default' : 'cursor-pointer'}`}
+                  style={active ? {
+                    backgroundColor: color,
+                    boxShadow: `0 0 16px ${color}40, 0 0 4px ${color}30`,
+                  } : {}}
                 >
                   {PROJECT_TYPE_LABELS[type]}
                 </button>
@@ -454,259 +405,243 @@ export default function ProjectPanel({
           </div>
         </div>
 
-        {/* ── Stats ── */}
-        <div className="px-5 py-4 border-b border-white/8">
-          <div className="grid grid-cols-4 gap-2">
-            <StatBox
-              icon={<TreePine className="h-4 w-4" />}
-              label="trees"
-              value={trees}
-              editable={isOwner}
-              onChange={v => handleStatUpdate('trees_planted', v)}
-            />
-            <StatBox
-              icon={<span className="text-xs text-white/30">m²</span>}
-              label="area"
-              value={project.area_sqm}
-            />
-            <StatBox
-              icon={<Users className="h-4 w-4" />}
-              label="volunteers"
-              value={project.contributor_count}
-            />
-            <StatBox
-              icon={<Clock className="h-4 w-4" />}
-              label="hours"
-              value={hours}
-              editable={isOwner}
-              onChange={v => handleStatUpdate('volunteer_hours', v)}
-            />
+        {/* ── STATS ── */}
+        <div className="px-6 pb-7">
+          <SectionLabel>Impact</SectionLabel>
+          <div className="grid grid-cols-2 gap-3">
+            <StatCard icon={<TreePine className="h-4 w-4" />} label="Trees planted" value={trees}
+              editable={isOwner} accent="rgba(74,222,128,0.07)"
+              onChange={v => handleStatUpdate('trees_planted', v)} />
+            <StatCard icon={<span className="text-xs font-mono">m²</span>} label="Area restored" value={project.area_sqm} />
+            <StatCard icon={<Users className="h-4 w-4" />} label="Volunteers" value={project.contributor_count} />
+            <StatCard icon={<Clock className="h-4 w-4" />} label="Volunteer hours" value={hours}
+              editable={isOwner} accent="rgba(74,222,128,0.07)"
+              onChange={v => handleStatUpdate('volunteer_hours', v)} />
           </div>
-          {isOwner && <p className="mt-2 text-center text-[10px] text-white/20">Click trees or hours to update</p>}
+          {isOwner && (
+            <p className="mt-2.5 text-[9px] text-white/18 text-center tracking-wide">
+              Click trees or hours to update
+            </p>
+          )}
         </div>
 
-        {/* ── Overview ── */}
-        <div className="px-5 py-5 border-b border-white/8 space-y-4">
-          <div className="flex items-center gap-2 text-xs font-medium text-white/40 uppercase tracking-wider">
-            <FileText className="h-3.5 w-3.5" />
-            Overview
-          </div>
-          <div>
-            <label className="mb-1.5 block text-xs text-white/30">About this site</label>
-            <textarea
-              value={description}
-              onChange={e => handleDescriptionChange(e.target.value)}
-              placeholder="Describe this restoration site — location, ecosystem, community involvement…"
-              rows={3}
-              readOnly={!isOwner}
-              className={`w-full resize-none rounded-xl border border-white/8 px-4 py-3 text-sm text-white/80 placeholder-white/20 outline-none leading-relaxed transition ${
-                isOwner ? 'bg-white/3 focus:border-green-500/30 focus:bg-white/5' : 'bg-transparent cursor-default'
-              }`}
-            />
-          </div>
-          <div>
-            <label className="mb-1.5 block text-xs text-white/30">Contact</label>
-            <input
-              type="text"
-              value={contact}
-              onChange={e => handleContactChange(e.target.value)}
-              placeholder="Name, email, or phone number…"
-              readOnly={!isOwner}
-              className={`w-full rounded-lg border border-white/8 px-3 py-2 text-sm text-white/80 placeholder-white/20 outline-none transition ${
-                isOwner ? 'bg-white/3 focus:border-green-500/30 focus:bg-white/5' : 'bg-transparent cursor-default'
-              }`}
-            />
-          </div>
-          {isOwner && <p className="text-xs text-white/20">Auto-saves as you type</p>}
-        </div>
+        {/* Divider */}
+        <div className="mx-6 h-px bg-white/[0.05] mb-7" />
 
-        {/* ── Events ── */}
-        <div className="px-5 py-5 border-b border-white/8">
-          <div className="flex items-center justify-between mb-4">
-            <div className="flex items-center gap-2 text-xs font-medium text-white/40 uppercase tracking-wider">
-              <Calendar className="h-3.5 w-3.5" />
-              Events
+        {/* ── OVERVIEW ── */}
+        <div className="px-6 pb-7">
+          <SectionLabel>Overview</SectionLabel>
+          <div className="space-y-4">
+            <div className="relative">
+              <textarea
+                value={description}
+                onChange={e => handleDescriptionChange(e.target.value)}
+                placeholder="Describe this restoration site — ecosystem, history, goals, what makes it special…"
+                rows={4}
+                readOnly={!isOwner}
+                className={`w-full resize-none rounded-2xl text-sm text-white/75 placeholder-white/15 outline-none leading-relaxed transition-all duration-200 px-4 py-3.5 ${
+                  isOwner
+                    ? 'bg-white/[0.03] border border-white/6 focus:bg-white/[0.05] focus:border-white/12'
+                    : 'bg-transparent border border-white/4 cursor-default'
+                }`}
+              />
+              {isOwner && (
+                <div className={`absolute bottom-3 right-3 flex items-center gap-1.5 text-[9px] transition-all duration-500 ${descSaved ? 'text-white/18' : 'text-green-400/60'}`}>
+                  <span className={`h-1 w-1 rounded-full ${descSaved ? 'bg-white/20' : 'bg-green-400 animate-pulse'}`} />
+                  {descSaved ? 'Saved' : 'Saving…'}
+                </div>
+              )}
             </div>
+
+            <div className="relative">
+              <label className="block text-[9px] uppercase tracking-[0.14em] text-white/22 font-medium mb-2">Contact</label>
+              <input
+                type="text"
+                value={contact}
+                onChange={e => handleContactChange(e.target.value)}
+                placeholder="Name, email, or phone…"
+                readOnly={!isOwner}
+                className={`w-full rounded-xl text-sm text-white/70 placeholder-white/15 outline-none transition-all duration-200 px-4 py-2.5 ${
+                  isOwner
+                    ? 'bg-white/[0.03] border border-white/6 focus:bg-white/[0.05] focus:border-white/12'
+                    : 'bg-transparent border border-white/4 cursor-default'
+                }`}
+              />
+            </div>
+          </div>
+        </div>
+
+        {/* Divider */}
+        <div className="mx-6 h-px bg-white/[0.05] mb-7" />
+
+        {/* ── EVENTS ── */}
+        <div className="px-6 pb-7">
+          <div className="flex items-center justify-between mb-4">
+            <SectionLabel>Events</SectionLabel>
             {isOwner && (
-              <Button variant="primary" size="sm" onClick={openNewEvent}>
-                <Plus className="h-3.5 w-3.5" /> Add event
-              </Button>
+              <button
+                onClick={openNewEvent}
+                className="flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-[11px] font-medium border border-green-500/20 bg-green-500/6 text-green-400 hover:bg-green-500/12 hover:border-green-500/35 transition-all duration-200"
+                style={{ boxShadow: '0 0 12px rgba(74,222,128,0.08)' }}
+              >
+                <Plus className="h-3 w-3" /> Add event
+              </button>
             )}
           </div>
 
-          {upcomingEvents.length === 0 && pastEvents.length === 0 && (
-            <p className="text-sm text-white/25 text-center py-4">No events yet</p>
-          )}
-
-          {upcomingEvents.length > 0 && (
-            <div className="space-y-2 mb-3">
-              <p className="text-[10px] text-white/30 uppercase tracking-wider mb-2">Upcoming</p>
-              {upcomingEvents.map(evt => (
-                <button
-                  key={evt.id}
-                  onClick={() => isOwner && openEditEvent(evt)}
-                  className={`w-full flex items-center gap-3 rounded-lg border border-white/8 bg-white/2 px-3 py-2.5 text-left transition-colors ${isOwner ? 'hover:bg-white/5 cursor-pointer' : 'cursor-default'}`}
-                >
-                  <span className="h-2 w-2 rounded-full shrink-0" style={{ background: evt.color ?? EVENT_TYPE_COLORS[evt.event_type] }} />
-                  <span className="flex-1 text-sm text-white/70 truncate">{evt.title}</span>
-                  <span className="text-xs text-white/30 shrink-0">
-                    {new Date(evt.start_date).toLocaleDateString('en-NZ', { day: 'numeric', month: 'short', year: 'numeric' })}
-                  </span>
-                  {isOwner && <Pencil className="h-3 w-3 text-white/20" />}
-                </button>
-              ))}
+          {upcomingEvents.length === 0 && pastEvents.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-10 rounded-2xl border border-white/5 bg-white/[0.01]">
+              <div className="h-10 w-10 rounded-full border border-white/8 bg-white/3 flex items-center justify-center mb-3">
+                <span className="text-lg">🌱</span>
+              </div>
+              <p className="text-sm text-white/25 font-medium">No events yet</p>
+              {isOwner && <p className="text-xs text-white/15 mt-1">Add the first one above</p>}
             </div>
-          )}
+          ) : (
+            <div className="space-y-2">
+              {upcomingEvents.map(evt => (
+                <EventRow key={evt.id} evt={evt} isOwner={isOwner} onEdit={openEditEvent} />
+              ))}
 
-          {pastEvents.length > 0 && (
-            <div>
-              <button
-                onClick={() => setShowPastEvents(v => !v)}
-                className="flex items-center gap-2 text-[10px] text-white/30 uppercase tracking-wider mb-2 hover:text-white/50 transition-colors"
-              >
-                {showPastEvents ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
-                Past events ({pastEvents.length})
-              </button>
-              {showPastEvents && (
-                <div className="space-y-2">
-                  {pastEvents.map(evt => (
-                    <button
-                      key={evt.id}
-                      onClick={() => isOwner && openEditEvent(evt)}
-                      className={`w-full flex items-center gap-3 rounded-lg border border-white/5 bg-white/1 px-3 py-2.5 text-left transition-colors opacity-60 ${isOwner ? 'hover:opacity-80 cursor-pointer' : 'cursor-default'}`}
-                    >
-                      <span className="h-2 w-2 rounded-full shrink-0" style={{ background: evt.color ?? EVENT_TYPE_COLORS[evt.event_type] }} />
-                      <span className="flex-1 text-sm text-white/60 truncate">{evt.title}</span>
-                      <span className="text-xs text-white/25 shrink-0">
-                        {new Date(evt.start_date).toLocaleDateString('en-NZ', { day: 'numeric', month: 'short', year: 'numeric' })}
-                      </span>
-                    </button>
-                  ))}
+              {pastEvents.length > 0 && (
+                <div>
+                  <button
+                    onClick={() => setShowPastEvents(v => !v)}
+                    className="flex items-center gap-2 w-full py-2.5 text-[10px] text-white/22 uppercase tracking-[0.12em] hover:text-white/40 transition-colors"
+                  >
+                    <ChevronDown className={`h-3 w-3 transition-transform duration-200 ${showPastEvents ? 'rotate-180' : ''}`} />
+                    Past ({pastEvents.length})
+                  </button>
+                  {showPastEvents && (
+                    <div className="space-y-2 animate-fade-in opacity-50">
+                      {pastEvents.map(evt => (
+                        <EventRow key={evt.id} evt={evt} isOwner={isOwner} onEdit={openEditEvent} past />
+                      ))}
+                    </div>
+                  )}
                 </div>
               )}
             </div>
           )}
         </div>
 
-        {/* ── Observations ── */}
-        <div className="px-5 py-5 border-b border-white/8">
+        {/* Divider */}
+        <div className="mx-6 h-px bg-white/[0.05] mb-7" />
+
+        {/* ── OBSERVATIONS ── */}
+        <div className="px-6 pb-7">
           <div className="flex items-center justify-between mb-4">
-            <div className="flex items-center gap-2 text-xs font-medium text-white/40 uppercase tracking-wider">
-              <Eye className="h-3.5 w-3.5" />
-              Observations
-            </div>
+            <SectionLabel>Observations</SectionLabel>
             {isAuthenticated && (
               <button
                 onClick={() => setShowObsForm(v => !v)}
-                className="flex items-center gap-1.5 text-xs text-white/40 hover:text-white/70 transition-colors"
+                className="flex items-center gap-1.5 rounded-xl px-2.5 py-1.5 text-[11px] font-medium border border-white/6 bg-white/[0.02] text-white/30 hover:text-white/55 hover:bg-white/5 hover:border-white/10 transition-all duration-200"
               >
-                <Plus className="h-3.5 w-3.5" /> Add
+                <Eye className="h-3 w-3" /> Record
               </button>
             )}
           </div>
 
           {showObsForm && (
-            <div className="mb-4 rounded-xl border border-white/10 bg-white/3 p-4 space-y-3">
-              <div className="flex gap-3">
-                <div className="flex-1">
-                  <input
-                    type="date"
-                    value={obsDate}
-                    onChange={e => setObsDate(e.target.value)}
-                    className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-1.5 text-xs text-white outline-none focus:border-green-500/40 [color-scheme:dark]"
-                  />
-                </div>
-              </div>
+            <div className="mb-4 rounded-2xl border border-white/8 bg-white/[0.03] p-4 space-y-3 animate-fade-up">
+              <input
+                type="date"
+                value={obsDate}
+                onChange={e => setObsDate(e.target.value)}
+                className="w-full rounded-xl border border-white/8 bg-white/[0.03] px-3 py-2 text-xs text-white/70 outline-none focus:border-white/15 [color-scheme:dark] transition-all"
+              />
               <textarea
                 autoFocus
                 value={obsContent}
                 onChange={e => setObsContent(e.target.value)}
-                placeholder="What did you observe? Species spotted, plant health, environmental conditions…"
+                placeholder="What did you observe? Species, plant health, environmental conditions, changes since last visit…"
                 rows={3}
-                className="w-full resize-none rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-white/80 placeholder-white/20 outline-none focus:border-green-500/40"
+                className="w-full resize-none rounded-xl border border-white/8 bg-white/[0.03] px-3 py-2.5 text-sm text-white/75 placeholder-white/18 outline-none focus:border-white/15 leading-relaxed transition-all"
               />
               <div className="flex justify-end gap-2">
-                <Button variant="ghost" size="sm" onClick={() => { setShowObsForm(false); setObsContent('') }}>Cancel</Button>
-                <Button variant="primary" size="sm" onClick={handleSaveObservation} loading={savingObs} disabled={!obsContent.trim()}>
-                  <Check className="h-3.5 w-3.5" /> Save
-                </Button>
+                <button onClick={() => { setShowObsForm(false); setObsContent('') }}
+                  className="px-3 py-1.5 rounded-lg text-xs text-white/30 hover:text-white/55 transition-colors">
+                  Cancel
+                </button>
+                <button
+                  onClick={handleSaveObservation}
+                  disabled={!obsContent.trim() || savingObs}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-green-500/12 border border-green-500/20 text-green-400 text-xs font-medium hover:bg-green-500/20 disabled:opacity-40 transition-all"
+                >
+                  <Check className="h-3 w-3" /> Save
+                </button>
               </div>
             </div>
           )}
 
-          {observations.length === 0 && !showObsForm && (
-            <p className="text-sm text-white/25 text-center py-4">No observations recorded yet</p>
-          )}
-
-          <div className="space-y-3">
-            {observations.map(obs => (
-              <div key={obs.id} className="group relative rounded-lg border border-white/8 bg-white/2 px-3 py-3">
-                <div className="flex items-center justify-between mb-1.5">
-                  <span className="text-[10px] text-white/30 uppercase tracking-wider">
-                    {new Date(obs.observed_at + 'T12:00').toLocaleDateString('en-NZ', { day: 'numeric', month: 'long', year: 'numeric' })}
-                  </span>
-                  {obs.created_by === userId && (
-                    <button
-                      onClick={() => handleDeleteObservation(obs.id)}
-                      className="opacity-0 group-hover:opacity-100 transition-opacity text-white/20 hover:text-red-400"
-                    >
-                      <Trash2 className="h-3 w-3" />
-                    </button>
-                  )}
+          {observations.length === 0 && !showObsForm ? (
+            <div className="flex flex-col items-center justify-center py-8 rounded-2xl border border-white/5 bg-white/[0.01]">
+              <p className="text-sm text-white/20">No observations yet</p>
+            </div>
+          ) : (
+            <div className="space-y-2.5">
+              {observations.map(obs => (
+                <div key={obs.id} className="group rounded-2xl border border-white/6 bg-white/[0.02] px-4 py-3.5 transition-all duration-200 hover:bg-white/[0.035] hover:border-white/8">
+                  <div className="flex items-start justify-between gap-3 mb-2">
+                    <span className="text-[9px] uppercase tracking-[0.14em] text-white/25 font-medium pt-0.5">
+                      {new Date(obs.observed_at + 'T12:00').toLocaleDateString('en-NZ', { day: 'numeric', month: 'long', year: 'numeric' })}
+                    </span>
+                    {obs.created_by === userId && (
+                      <button
+                        onClick={() => handleDeleteObservation(obs.id)}
+                        className="opacity-0 group-hover:opacity-100 transition-all duration-150 text-white/20 hover:text-red-400 shrink-0"
+                      >
+                        <Trash2 className="h-3 w-3" />
+                      </button>
+                    )}
+                  </div>
+                  <p className="text-sm text-white/65 leading-relaxed">{obs.content}</p>
                 </div>
-                <p className="text-sm text-white/70 leading-relaxed">{obs.content}</p>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          )}
         </div>
 
-        {/* ── Story ── */}
-        <div className="px-5 py-5 border-b border-white/8">
-          <div className="flex items-center gap-2 mb-3 text-xs font-medium text-white/40 uppercase tracking-wider">
-            <FileText className="h-3.5 w-3.5" />
-            Story
-          </div>
+        {/* Divider */}
+        <div className="mx-6 h-px bg-white/[0.05] mb-7" />
+
+        {/* ── STORY ── */}
+        <div className="px-6 pb-10">
+          <SectionLabel>Story</SectionLabel>
           <textarea
             ref={storyRef}
             value={story}
             onChange={e => handleStoryChange(e.target.value)}
-            placeholder="Tell the story of this site — how it started, milestones reached, what's been planted, wildlife returning…"
+            placeholder="Tell the story of this place — how it began, what's been planted, wildlife returning, community that shaped it…"
             readOnly={!isOwner}
-            className={`w-full min-h-[120px] resize-none rounded-xl border border-white/8 px-4 py-3 text-sm text-white/80 placeholder-white/20 outline-none leading-relaxed transition ${
-              isOwner ? 'bg-white/3 focus:border-green-500/30 focus:bg-white/5' : 'bg-transparent cursor-default'
+            className={`w-full min-h-[140px] resize-none rounded-2xl text-sm text-white/70 placeholder-white/12 outline-none leading-relaxed transition-all duration-200 px-4 py-3.5 ${
+              isOwner
+                ? 'bg-white/[0.03] border border-white/6 focus:bg-white/[0.05] focus:border-white/12'
+                : 'bg-transparent border border-white/4 cursor-default'
             }`}
           />
-          {isOwner && <p className="mt-1.5 text-xs text-white/20">Auto-saves as you type</p>}
+          {isOwner && <p className="mt-2 text-[9px] text-white/18 tracking-wide">Auto-saves as you type</p>}
         </div>
-
-        {/* ── Bottom padding ── */}
-        <div className="h-8" />
       </div>
 
-      {/* ── Event form modal ── */}
-      <Modal
-        open={showEventForm}
-        onClose={() => setShowEventForm(false)}
-        title={editingEventId ? 'Edit event' : 'Add event'}
-        size="lg"
-      >
+      {/* ── EVENT FORM MODAL ── */}
+      <Modal open={showEventForm} onClose={() => setShowEventForm(false)}
+        title={editingEventId ? 'Edit event' : 'Add event'} size="lg">
         <div className="p-5 space-y-4 max-h-[80vh] overflow-y-auto">
           <div>
-            <label className="mb-1.5 block text-xs font-medium text-white/40 uppercase tracking-wider">Description</label>
+            <label className="block text-[9px] uppercase tracking-[0.14em] text-white/30 font-medium mb-2">Description</label>
             <input
-              type="text"
-              value={eventForm.title}
+              type="text" value={eventForm.title} autoFocus
               onChange={e => setEventForm(f => ({ ...f, title: e.target.value }))}
               placeholder="What's happening here…"
-              autoFocus
-              className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2.5 text-sm text-white placeholder-white/25 outline-none focus:border-green-500/40"
+              className="w-full rounded-xl border border-white/10 bg-white/[0.04] px-3.5 py-2.5 text-sm text-white placeholder-white/20 outline-none focus:border-white/18 transition-all"
             />
           </div>
 
           <div>
-            <label className="mb-1.5 block text-xs font-medium text-white/40 uppercase tracking-wider">
+            <label className="block text-[9px] uppercase tracking-[0.14em] text-white/30 font-medium mb-2">
               {selectedDate
-                ? `Date · ${new Date(selectedDate + 'T12:00').toLocaleDateString('en-NZ', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}`
+                ? new Date(selectedDate + 'T12:00').toLocaleDateString('en-NZ', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })
                 : 'Pick a date'}
             </label>
             <div className="add-event-calendar rounded-xl border border-white/8 bg-black/20 overflow-hidden">
@@ -715,32 +650,25 @@ export default function ProjectPanel({
                 initialView="dayGridMonth"
                 initialDate={selectedDate || undefined}
                 headerToolbar={{ left: 'prev,next', center: 'title', right: '' }}
-                events={[
-                  ...fcEvents,
-                  ...(selectedDate ? [{ start: selectedDate, display: 'background' as const, backgroundColor: 'rgba(34,197,94,0.22)' }] : []),
-                ]}
+                events={[...fcEvents, ...(selectedDate ? [{ start: selectedDate, display: 'background' as const, backgroundColor: 'rgba(74,222,128,0.18)' }] : [])]}
                 dateClick={arg => setSelectedDate(arg.dateStr)}
-                height="auto"
-                displayEventTime={false}
-                dayMaxEvents={2}
+                height="auto" displayEventTime={false} dayMaxEvents={2}
               />
             </div>
           </div>
 
           <div>
-            <label className="mb-1.5 block text-xs font-medium text-white/40 uppercase tracking-wider">Type</label>
+            <label className="block text-[9px] uppercase tracking-[0.14em] text-white/30 font-medium mb-2">Type</label>
             <div className="flex flex-wrap gap-2">
               {(Object.keys(EVENT_TYPE_COLORS) as EventType[]).map(type => {
                 const active = type === eventForm.eventType
                 return (
-                  <button
-                    key={type}
-                    type="button"
+                  <button key={type} type="button"
                     onClick={() => setEventForm(f => ({ ...f, eventType: type }))}
-                    className={`px-3 py-1.5 rounded-full text-xs font-medium border transition-all ${
-                      active ? 'border-transparent text-white' : 'border-white/10 text-white/40 hover:text-white/70 hover:border-white/20'
+                    className={`px-3 py-1.5 rounded-full text-[11px] font-medium border transition-all duration-200 ${
+                      active ? 'border-transparent text-white' : 'border-white/8 text-white/35 hover:text-white/60 hover:border-white/12'
                     }`}
-                    style={active ? { backgroundColor: EVENT_TYPE_COLORS[type] } : {}}
+                    style={active ? { backgroundColor: EVENT_TYPE_COLORS[type], boxShadow: `0 0 12px ${EVENT_TYPE_COLORS[type]}40` } : {}}
                   >
                     {type.charAt(0).toUpperCase() + type.slice(1)}
                   </button>
@@ -749,27 +677,47 @@ export default function ProjectPanel({
             </div>
           </div>
 
-          <div className="flex items-center gap-2 pt-1">
+          <div className="flex items-center gap-2 pt-1 border-t border-white/6">
             {editingEventId && (
-              <Button variant="danger" size="sm" onClick={handleDeleteEvent}>
+              <button onClick={handleDeleteEvent} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs text-red-400/70 hover:text-red-400 hover:bg-red-500/8 transition-all">
                 <Trash2 className="h-3.5 w-3.5" /> Delete
-              </Button>
+              </button>
             )}
             <div className="flex-1" />
-            <Button variant="ghost" size="sm" onClick={() => setShowEventForm(false)}>Cancel</Button>
-            <Button
-              variant="primary"
-              size="sm"
-              onClick={handleSaveEvent}
-              loading={savingEvent}
-              disabled={!eventForm.title || !selectedDate}
+            <button onClick={() => setShowEventForm(false)} className="px-3 py-1.5 rounded-lg text-xs text-white/30 hover:text-white/55 transition-colors">
+              Cancel
+            </button>
+            <button
+              onClick={handleSaveEvent} disabled={!eventForm.title || !selectedDate || savingEvent}
+              className="flex items-center gap-1.5 px-4 py-1.5 rounded-lg bg-green-500/15 border border-green-500/25 text-green-400 text-xs font-medium hover:bg-green-500/22 disabled:opacity-40 transition-all"
+              style={{ boxShadow: '0 0 12px rgba(74,222,128,0.1)' }}
             >
               <Check className="h-3.5 w-3.5" />
               {editingEventId ? 'Update' : 'Add event'}
-            </Button>
+            </button>
           </div>
         </div>
       </Modal>
     </>
+  )
+}
+
+// ── Event row ─────────────────────────────────────────────────────────────────
+function EventRow({ evt, isOwner, onEdit, past }: { evt: ProjectEvent; isOwner: boolean; onEdit: (e: ProjectEvent) => void; past?: boolean }) {
+  const color = evt.color ?? EVENT_TYPE_COLORS[evt.event_type]
+  return (
+    <button
+      onClick={() => isOwner && onEdit(evt)}
+      className={`w-full flex items-center gap-3 rounded-xl border px-3.5 py-2.5 text-left transition-all duration-200 ${
+        isOwner ? 'cursor-pointer hover:bg-white/[0.04] hover:border-white/10' : 'cursor-default'
+      } ${past ? 'border-white/4 bg-white/[0.01]' : 'border-white/6 bg-white/[0.02]'}`}
+    >
+      <span className="h-full w-0.5 rounded-full shrink-0 self-stretch min-h-[20px]" style={{ background: color, opacity: past ? 0.4 : 0.8 }} />
+      <span className={`flex-1 text-sm truncate ${past ? 'text-white/40' : 'text-white/65'}`}>{evt.title}</span>
+      <span className="text-[10px] text-white/25 shrink-0 tabular-nums">
+        {new Date(evt.start_date).toLocaleDateString('en-NZ', { day: 'numeric', month: 'short', year: 'numeric' })}
+      </span>
+      {isOwner && !past && <Pencil className="h-2.5 w-2.5 text-white/15 shrink-0" />}
+    </button>
   )
 }

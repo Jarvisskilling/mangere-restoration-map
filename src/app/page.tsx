@@ -127,7 +127,7 @@ export default function HomePage() {
               <Leaf className="h-4 w-4 text-green-400" />
             </div>
             <div>
-              <h1 className="text-sm font-semibold text-white leading-none">Māngere Restoration Map</h1>
+              <h1 className="text-sm font-semibold text-white leading-none">Māngere Taiao Restoration</h1>
               <p className="text-[11px] text-white/30 leading-none mt-0.5">Auckland, New Zealand</p>
             </div>
           </div>

@@ -177,13 +177,13 @@ export default function HomePage() {
       </div>
 
       {/* ── Project panel ── */}
-      {selectedProject && user && (
+      {selectedProject && (
         <ProjectPanel
           project={selectedProject}
           onClose={() => setSelectedProject(null)}
           onProjectUpdate={handleProjectUpdate}
           onProjectDelete={handleProjectDelete}
-          userId={user.id}
+          userId={user?.id}
           isAuthenticated={isAuthenticated}
         />
       )}

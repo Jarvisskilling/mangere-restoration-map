@@ -39,7 +39,7 @@ interface ProjectPanelProps {
   onClose: () => void
   onProjectUpdate: (p: Project) => void
   onProjectDelete: (id: string) => void
-  userId: string
+  userId?: string
   isAuthenticated: boolean
 }
 
@@ -150,14 +150,14 @@ export default function ProjectPanel({
   const autoSaveRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
   const descAutoSave = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
   const contactAutoSave = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
-  const isOwner = project.created_by === userId
+  const isOwner = !!userId && project.created_by === userId
 
   useEffect(() => {
     fetchProjectStory(project.id).then(s => { if (s) setStory(s.content) })
     fetchProjectEvents(project.id).then(setEvents)
     fetchProjectObservations(project.id).then(setObservations)
     fetchFollowerCount(project.id).then(setFollowerCount)
-    if (isAuthenticated) checkIsFollowing(project.id, userId).then(setIsFollowing)
+    if (isAuthenticated && userId) checkIsFollowing(project.id, userId).then(setIsFollowing)
   }, [project.id, userId, isAuthenticated])
 
   useEffect(() => {
@@ -169,6 +169,7 @@ export default function ProjectPanel({
 
   const handleStoryChange = (val: string) => {
     setStory(val)
+    if (!userId) return
     clearTimeout(autoSaveRef.current)
     autoSaveRef.current = setTimeout(async () => {
       try { await upsertProjectStory(project.id, val, userId) } catch { toast.error('Failed to save') }
@@ -230,7 +231,7 @@ export default function ProjectPanel({
   }
 
   const handleFollow = async () => {
-    if (!isAuthenticated || followLoading) return
+    if (!isAuthenticated || !userId || followLoading) return
     setFollowLoading(true)
     try {
       if (isFollowing) {
@@ -256,7 +257,7 @@ export default function ProjectPanel({
   }, [])
 
   const handleSaveEvent = async () => {
-    if (!eventForm.title || !selectedDate) return
+    if (!eventForm.title || !selectedDate || !userId) return
     setSavingEvent(true)
     const start_date = `${selectedDate}T${eventForm.allDay ? '00:00:00' : '09:00:00'}`
     try {
@@ -280,7 +281,7 @@ export default function ProjectPanel({
   }
 
   const handleSaveObservation = async () => {
-    if (!obsContent.trim()) return
+    if (!obsContent.trim() || !userId) return
     setSavingObs(true)
     try {
       const created = await createProjectObservation({ project_id: project.id, content: obsContent.trim(), observed_at: obsDate, created_by: userId })

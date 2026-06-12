@@ -52,12 +52,12 @@ export default function StatCards() {
       {cards.map((card) => (
         <div
           key={card.label}
-          className="group relative overflow-hidden rounded-2xl border border-white/8 bg-black/60 p-4 backdrop-blur-xl transition-all duration-300 hover:border-white/15 hover:bg-black/70"
+          className="group relative overflow-hidden rounded-3xl border border-[#5c6f55]/13 bg-[#fffaf1]/78 p-4 shadow-[0_14px_36px_rgba(68,79,58,0.12)] backdrop-blur-xl transition-all duration-300 hover:-translate-y-0.5 hover:border-[#5c6f55]/22 hover:bg-white"
         >
           <div
             className="absolute inset-0 opacity-0 transition-opacity duration-300 group-hover:opacity-100"
             style={{
-              background: `radial-gradient(ellipse at top left, ${card.color}10 0%, transparent 70%)`,
+              background: `radial-gradient(ellipse at top left, ${card.color}18 0%, transparent 70%)`,
             }}
           />
           <div className="relative">
@@ -68,7 +68,7 @@ export default function StatCards() {
               {card.icon}
               {card.label}
             </div>
-            <div className="text-2xl font-bold text-white tracking-tight">
+            <div className="text-2xl font-bold text-[#183225] tracking-tight">
               {card.value}
             </div>
           </div>

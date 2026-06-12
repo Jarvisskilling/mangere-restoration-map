@@ -207,17 +207,17 @@ export default function CommunityCalendar({ userId, isAuthenticated, onEventsCha
   }
 
   return (
-    <section className="border-t border-white/8 bg-[#050505] px-6 py-12 lg:px-12">
+    <section className="border-t border-[#5c6f55]/12 bg-[#f5f1e8] px-6 py-12 lg:px-12">
       <div className="mx-auto max-w-6xl">
         {/* Section header */}
         <div className="mb-8 flex items-end justify-between">
           <div>
-            <div className="mb-2 inline-flex items-center gap-2 rounded-full border border-green-500/20 bg-green-500/5 px-3 py-1 text-xs text-green-400">
+            <div className="mb-2 inline-flex items-center gap-2 rounded-full border border-[#5f8f49]/18 bg-[#5f8f49]/8 px-3 py-1 text-xs font-medium text-[#4f7f3f]">
               <Globe className="h-3 w-3" />
               Community
             </div>
-            <h2 className="text-2xl font-bold text-white">Community Calendar</h2>
-            <p className="mt-1 text-sm text-white/40">
+            <h2 className="text-2xl font-bold text-[#183225]">Community Calendar</h2>
+            <p className="mt-1 text-sm text-[#183225]/55">
               Upcoming restoration events, cleanups, and community gatherings across Māngere
             </p>
           </div>
@@ -233,7 +233,7 @@ export default function CommunityCalendar({ userId, isAuthenticated, onEventsCha
         {/* Legend */}
         <div className="mb-6 flex flex-wrap gap-3">
           {Object.entries(EVENT_TYPE_COLORS).map(([type, color]) => (
-            <span key={type} className="flex items-center gap-1.5 text-xs text-white/40">
+            <span key={type} className="flex items-center gap-1.5 text-xs text-[#183225]/52">
               <span className="h-2 w-2 rounded-full" style={{ background: color }} />
               {type.charAt(0).toUpperCase() + type.slice(1)}
             </span>
@@ -246,7 +246,7 @@ export default function CommunityCalendar({ userId, isAuthenticated, onEventsCha
             <div className="h-7 w-7 animate-spin rounded-full border-2 border-green-500/20 border-t-green-500" />
           </div>
         ) : (
-          <div className="community-calendar rounded-2xl border border-white/8 bg-black/40 p-4 backdrop-blur-sm">
+          <div className="community-calendar rounded-3xl border border-[#5c6f55]/14 bg-[#fffaf1]/72 p-4 shadow-[0_18px_50px_rgba(68,79,58,0.12)] backdrop-blur-sm">
             <FullCalendar
               plugins={[dayGridPlugin, timeGridPlugin, listPlugin, interactionPlugin]}
               initialView="dayGridMonth"
@@ -272,7 +272,7 @@ export default function CommunityCalendar({ userId, isAuthenticated, onEventsCha
         )}
 
         {!isAuthenticated && (
-          <p className="mt-4 text-center text-xs text-white/25">
+          <p className="mt-4 text-center text-xs text-[#183225]/42">
             Sign in to add and manage community events
           </p>
         )}

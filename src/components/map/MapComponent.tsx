@@ -137,7 +137,7 @@ export default function MapComponent({
         attributionControl={true}
       >
         <TileLayer
-          url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
+          url="https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png"
           attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions">CARTO</a>'
           subdomains="abcd"
           maxZoom={19}
@@ -184,19 +184,19 @@ export default function MapComponent({
       {/* Search + filter — outer div is pointer-events-none so only the actual inputs receive clicks */}
       <div className="pointer-events-none absolute left-4 right-4 top-4 flex items-center gap-3 max-w-2xl mx-auto" style={{ zIndex: 1200 }}>
         <div className="relative flex-1">
-          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-white/40" />
+          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#183225]/42" />
           <input
             type="text"
             placeholder="Search locations in Māngere…"
             value={searchInput}
             onChange={e => setSearchInput(e.target.value)}
             onKeyDown={e => { if (e.key === 'Enter') setSearchQuery(searchInput) }}
-            className="pointer-events-auto w-full rounded-xl border border-white/10 bg-black/70 py-2.5 pl-10 pr-4 text-sm text-white placeholder-white/30 backdrop-blur-xl outline-none transition focus:border-green-500/50"
+            className="pointer-events-auto w-full rounded-2xl border border-[#5c6f55]/16 bg-[#fffaf1]/88 py-2.5 pl-10 pr-4 text-sm text-[#183225] placeholder-[#183225]/38 shadow-[0_12px_34px_rgba(68,79,58,0.16)] backdrop-blur-xl outline-none transition focus:border-[#5f8f49]/45 focus:bg-white"
           />
           {searchInput && (
             <button
               onClick={() => { setSearchInput(''); setSearchQuery('') }}
-              className="pointer-events-auto absolute right-3 top-1/2 -translate-y-1/2 text-white/30 hover:text-white"
+              className="pointer-events-auto absolute right-3 top-1/2 -translate-y-1/2 text-[#183225]/35 hover:text-[#183225]"
             >
               <X className="h-3.5 w-3.5" />
             </button>
@@ -204,14 +204,14 @@ export default function MapComponent({
         </div>
 
         <div className="relative">
-          <Layers className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-white/40" />
+          <Layers className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#183225]/42" />
           <select
             value={filterType}
             onChange={e => setFilterType(e.target.value)}
-            className="pointer-events-auto appearance-none rounded-xl border border-white/10 bg-black/70 py-2.5 pl-9 pr-8 text-sm text-white backdrop-blur-xl outline-none cursor-pointer"
+            className="pointer-events-auto appearance-none rounded-2xl border border-[#5c6f55]/16 bg-[#fffaf1]/88 py-2.5 pl-9 pr-8 text-sm text-[#183225] shadow-[0_12px_34px_rgba(68,79,58,0.16)] backdrop-blur-xl outline-none cursor-pointer"
           >
             {PROJECT_TYPES.map(t => (
-              <option key={t} value={t} className="bg-[#111]">
+              <option key={t} value={t} className="bg-[#fffaf1] text-[#183225]">
                 {t === 'all' ? 'All types' : t.charAt(0).toUpperCase() + t.slice(1)}
               </option>
             ))}
@@ -222,7 +222,7 @@ export default function MapComponent({
       {/* Click hint */}
       {isAuthenticated && clickHint && (
         <div className="pointer-events-none absolute bottom-8 left-1/2 z-[1000] -translate-x-1/2 animate-fade-up">
-          <div className="rounded-full border border-green-500/20 bg-black/80 px-4 py-2 text-xs text-green-400 backdrop-blur-xl">
+          <div className="rounded-full border border-[#5f8f49]/20 bg-[#fffaf1]/88 px-4 py-2 text-xs font-medium text-[#4f7f3f] shadow-[0_12px_30px_rgba(68,79,58,0.14)] backdrop-blur-xl">
             Click anywhere on the map to add a project or event
           </div>
         </div>
@@ -230,7 +230,7 @@ export default function MapComponent({
 
       {!isAuthenticated && (
         <div className="pointer-events-none absolute bottom-8 left-1/2 z-[1000] -translate-x-1/2">
-          <div className="rounded-full border border-white/10 bg-black/80 px-4 py-2 text-xs text-white/40 backdrop-blur-xl">
+          <div className="rounded-full border border-[#5c6f55]/14 bg-[#fffaf1]/88 px-4 py-2 text-xs text-[#183225]/55 shadow-[0_12px_30px_rgba(68,79,58,0.14)] backdrop-blur-xl">
             Sign in to add restoration sites
           </div>
         </div>
@@ -238,7 +238,7 @@ export default function MapComponent({
 
       {projects.length > 0 && (
         <div className="absolute right-4 top-20 z-[1000]">
-          <div className="rounded-lg border border-white/10 bg-black/70 px-3 py-1.5 text-xs text-white/50 backdrop-blur-xl">
+          <div className="rounded-xl border border-[#5c6f55]/14 bg-[#fffaf1]/86 px-3 py-1.5 text-xs font-medium text-[#183225]/58 shadow-[0_12px_30px_rgba(68,79,58,0.12)] backdrop-blur-xl">
             {projects.length} site{projects.length !== 1 ? 's' : ''}
           </div>
         </div>

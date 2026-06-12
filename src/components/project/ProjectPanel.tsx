@@ -303,19 +303,19 @@ export default function ProjectPanel({
     <>
       {/* Backdrop */}
       <div className="fixed inset-0 z-[1400] animate-fade-in" onClick={onClose}
-        style={{ background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(6px)' }} />
+        style={{ background: 'rgba(31,47,34,0.22)', backdropFilter: 'blur(6px)' }} />
 
       {/* Panel */}
-      <div className="fixed right-0 top-0 bottom-0 z-[1500] w-full sm:w-[520px] flex flex-col overflow-y-auto animate-slide-in-right"
-        style={{ background: 'linear-gradient(160deg, #060606 0%, #040404 100%)', borderLeft: '1px solid rgba(255,255,255,0.06)' }}>
+      <div className="friendly-project-panel fixed right-0 top-0 bottom-0 z-[1500] w-full sm:w-[520px] flex flex-col overflow-y-auto animate-slide-in-right shadow-[0_0_80px_rgba(67,76,57,0.2)]"
+        style={{ background: 'linear-gradient(160deg, #fffaf1 0%, #f2eadf 100%)', borderLeft: '1px solid rgba(72,91,66,0.14)' }}>
 
         {/* Ambient header glow */}
         <div className="pointer-events-none absolute top-0 left-0 right-0 h-64 opacity-30"
-          style={{ background: `radial-gradient(ellipse at 30% 0%, ${PROJECT_TYPE_COLORS[projectType]}18 0%, transparent 70%)` }} />
+          style={{ background: `radial-gradient(ellipse at 30% 0%, ${PROJECT_TYPE_COLORS[projectType]}32 0%, transparent 70%)` }} />
 
         {/* ── HEADER ── */}
         <div className="sticky top-0 z-10 px-6 pt-7 pb-5"
-          style={{ background: 'linear-gradient(to bottom, #060606 60%, transparent 100%)' }}>
+          style={{ background: 'linear-gradient(to bottom, rgba(255,250,241,0.96) 62%, rgba(255,250,241,0))', backdropFilter: 'blur(18px)' }}>
           <div className="flex items-start justify-between gap-4">
             <div className="flex-1 min-w-0 relative">
               <input

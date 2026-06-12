@@ -16,13 +16,13 @@ const Button = forwardRef<HTMLButtonElement, ButtonProps>(
         className={cn(
           'relative inline-flex items-center justify-center gap-2 rounded-lg font-medium transition-[background-color,border-color,color,box-shadow,transform,opacity] duration-200 ease-out active:scale-[0.97] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-green-500 focus-visible:ring-offset-2 focus-visible:ring-offset-black disabled:pointer-events-none disabled:opacity-40 disabled:active:scale-100',
           {
-            'bg-green-500 text-black hover:bg-green-400 active:bg-green-600 shadow-glow-green hover:shadow-glow-green-lg':
+            'bg-[#5f8f49] text-white hover:bg-[#4f7f3f] active:bg-[#467238] shadow-[0_12px_28px_rgba(95,143,73,0.22)] hover:shadow-[0_16px_36px_rgba(95,143,73,0.28)]':
               variant === 'primary',
-            'bg-white/5 text-white border border-white/10 hover:bg-white/10 hover:border-white/20 active:bg-white/5':
+            'bg-white/70 text-[#183225] border border-[#5c6f55]/15 hover:bg-white hover:border-[#5c6f55]/25 active:bg-white/80':
               variant === 'secondary',
-            'text-white/70 hover:text-white hover:bg-white/5 active:bg-white/10':
+            'text-[#183225]/65 hover:text-[#183225] hover:bg-[#5f8f49]/8 active:bg-[#5f8f49]/12':
               variant === 'ghost',
-            'bg-red-500/10 text-red-400 border border-red-500/20 hover:bg-red-500/20':
+            'bg-red-500/8 text-red-700 border border-red-500/18 hover:bg-red-500/14':
               variant === 'danger',
           },
           {

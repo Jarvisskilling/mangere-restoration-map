@@ -27,7 +27,7 @@ export const viewport: Viewport = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en" suppressHydrationWarning>
-      <body className="bg-black text-white antialiased" suppressHydrationWarning>
+      <body className="bg-[#f5f1e8] text-[#183225] antialiased" suppressHydrationWarning>
         <AuthProvider>{children}</AuthProvider>
         <Toaster
           position="bottom-right"

@@ -207,10 +207,10 @@ export default function CommunityCalendar({ userId, isAuthenticated, onEventsCha
   }
 
   return (
-    <section className="border-t border-[#5c6f55]/12 bg-[#f5f1e8] px-6 py-12 lg:px-12">
+    <section className="border-t border-[#5c6f55]/12 bg-[#f5f1e8] px-4 py-10 sm:px-6 sm:py-12 lg:px-12">
       <div className="mx-auto max-w-6xl">
         {/* Section header */}
-        <div className="mb-8 flex items-end justify-between">
+        <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
           <div>
             <div className="mb-2 inline-flex items-center gap-2 rounded-full border border-[#5f8f49]/18 bg-[#5f8f49]/8 px-3 py-1 text-xs font-medium text-[#4f7f3f]">
               <Globe className="h-3 w-3" />
@@ -223,7 +223,7 @@ export default function CommunityCalendar({ userId, isAuthenticated, onEventsCha
           </div>
 
           {isAuthenticated && (
-            <Button variant="primary" size="md" onClick={() => openCreate()}>
+            <Button variant="primary" size="md" onClick={() => openCreate()} className="w-full sm:w-auto">
               <Calendar className="h-4 w-4" />
               Add event
             </Button>
@@ -246,7 +246,7 @@ export default function CommunityCalendar({ userId, isAuthenticated, onEventsCha
             <div className="h-7 w-7 animate-spin rounded-full border-2 border-green-500/20 border-t-green-500" />
           </div>
         ) : (
-          <div className="community-calendar rounded-3xl border border-[#5c6f55]/14 bg-[#fffaf1]/72 p-4 shadow-[0_18px_50px_rgba(68,79,58,0.12)] backdrop-blur-sm">
+          <div className="community-calendar rounded-3xl border border-[#5c6f55]/14 bg-[#fffaf1]/72 p-2 shadow-[0_18px_50px_rgba(68,79,58,0.12)] backdrop-blur-sm sm:p-4">
             <FullCalendar
               plugins={[dayGridPlugin, timeGridPlugin, listPlugin, interactionPlugin]}
               initialView="dayGridMonth"

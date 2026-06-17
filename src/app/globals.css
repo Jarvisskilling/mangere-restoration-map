@@ -242,6 +242,56 @@ body {
   padding: 8px !important;
 }
 
+@media (max-width: 640px) {
+  .community-calendar .fc {
+    font-size: 0.76rem;
+  }
+
+  .community-calendar .fc .fc-toolbar.fc-header-toolbar {
+    align-items: stretch;
+    flex-direction: column;
+    gap: 0.7rem;
+    margin-bottom: 0.85rem;
+  }
+
+  .community-calendar .fc .fc-toolbar-chunk {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+
+  .community-calendar .fc .fc-toolbar-title {
+    font-size: 0.95rem;
+    text-align: center;
+  }
+
+  .community-calendar .fc .fc-button {
+    padding: 0.32rem 0.58rem;
+    font-size: 0.7rem;
+  }
+
+  .community-calendar .fc .fc-col-header-cell-cushion {
+    font-size: 0.66rem;
+    padding: 0.4rem 0.1rem;
+  }
+
+  .community-calendar .fc .fc-daygrid-day-number {
+    font-size: 0.72rem;
+    padding: 0.18rem 0.28rem;
+  }
+
+  .community-calendar .fc .fc-daygrid-day-frame {
+    min-height: 4.4rem;
+  }
+
+  .community-calendar .fc .fc-event {
+    border-radius: 4px;
+    font-size: 0.66rem;
+    line-height: 1.2;
+    padding: 1px 3px;
+  }
+}
+
 /* ──────────────────────────────────────────────────────────
    Utility classes
    ────────────────────────────────────────────────────────── */

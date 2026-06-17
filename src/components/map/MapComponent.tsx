@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { MapContainer, TileLayer, Marker, ZoomControl, useMapEvents, useMap } from 'react-leaflet'
 import MarkerClusterGroup from 'react-leaflet-cluster'
 import L from 'leaflet'
@@ -21,8 +21,15 @@ interface MapComponentProps {
 }
 
 const MANGERE_CENTER: [number, number] = [-37.0, 174.8]
+const MAP_RENDERER = L.canvas({ padding: 0.35 })
+
+const markerIconCache = new Map<string, L.DivIcon>()
 
 function createMarkerIcon(color: string, selected: boolean): L.DivIcon {
+  const cacheKey = `${color}:${selected ? 'selected' : 'default'}`
+  const cached = markerIconCache.get(cacheKey)
+  if (cached) return cached
+
   const size = selected ? 40 : 30
   const r = size / 2
   const inner = selected ? 9 : 5.5
@@ -31,19 +38,27 @@ function createMarkerIcon(color: string, selected: boolean): L.DivIcon {
     <circle cx="${r}" cy="${r}" r="${inner}" fill="${color}"/>
     ${selected ? `<circle cx="${r}" cy="${r}" r="3.5" fill="white" fill-opacity="0.85"/>` : ''}
   </svg>`
-  return L.divIcon({ html: svg, className: '', iconSize: [size, size], iconAnchor: [r, r] })
+  const icon = L.divIcon({ html: svg, className: '', iconSize: [size, size], iconAnchor: [r, r] })
+  markerIconCache.set(cacheKey, icon)
+  return icon
 }
 
+const clusterIconCache = new Map<number, L.DivIcon>()
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function createClusterIcon(cluster: any): L.DivIcon {
   const count = cluster.getChildCount()
+  const cached = clusterIconCache.get(count)
+  if (cached) return cached
+
   const size = count > 99 ? 56 : count > 9 ? 48 : 40
   const svg = `<svg width="${size}" height="${size}" viewBox="0 0 ${size} ${size}" xmlns="http://www.w3.org/2000/svg">
     <circle cx="${size / 2}" cy="${size / 2}" r="${size / 2 - 2}" fill="#22c55e" fill-opacity="0.15" stroke="#22c55e" stroke-width="1.5"/>
     <text x="${size / 2}" y="${size / 2 + 4.5}" text-anchor="middle" fill="#22c55e" font-size="${count > 99 ? 12 : 13}" font-weight="600" font-family="system-ui,sans-serif">${count}</text>
   </svg>`
-  return L.divIcon({ html: svg, className: '', iconSize: [size, size], iconAnchor: [size / 2, size / 2] })
+  const icon = L.divIcon({ html: svg, className: '', iconSize: [size, size], iconAnchor: [size / 2, size / 2] })
+  clusterIconCache.set(count, icon)
+  return icon
 }
 
 function InvalidateSize() {
@@ -124,7 +139,14 @@ export default function MapComponent({
     return () => clearTimeout(t)
   }, [])
 
-  const filtered = filterType === 'all' ? projects : projects.filter(p => p.project_type === filterType)
+  const filtered = useMemo(
+    () => filterType === 'all' ? projects : projects.filter(p => p.project_type === filterType),
+    [projects, filterType]
+  )
+  const visibleEvents = useMemo(
+    () => communityEvents.filter(e => e.latitude != null && e.longitude != null),
+    [communityEvents]
+  )
 
   return (
     <div className="relative h-full w-full">
@@ -134,12 +156,24 @@ export default function MapComponent({
         style={{ height: '100%', width: '100%' }}
         zoomControl={false}
         attributionControl={true}
+        renderer={MAP_RENDERER}
+        preferCanvas={true}
+        zoomAnimation={true}
+        fadeAnimation={true}
+        markerZoomAnimation={false}
+        inertia={true}
+        easeLinearity={0.18}
+        wheelDebounceTime={18}
+        wheelPxPerZoomLevel={48}
       >
         <TileLayer
           url="https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png"
           attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions">CARTO</a>'
           subdomains="abcd"
           maxZoom={19}
+          keepBuffer={4}
+          updateWhenZooming={false}
+          updateWhenIdle={true}
         />
 
         <InvalidateSize />
@@ -150,8 +184,12 @@ export default function MapComponent({
         <MarkerClusterGroup
           iconCreateFunction={createClusterIcon}
           showCoverageOnHover={false}
-          maxClusterRadius={60}
+          removeOutsideVisibleBounds
+          animate={false}
+          maxClusterRadius={54}
           chunkedLoading
+          chunkInterval={120}
+          chunkDelay={20}
         >
           {filtered.map(project => (
             <Marker
@@ -166,8 +204,7 @@ export default function MapComponent({
             />
           ))}
 
-          {communityEvents
-            .filter(e => e.latitude != null && e.longitude != null)
+          {visibleEvents
             .map(evt => (
               <Marker
                 key={`evt-${evt.id}`}

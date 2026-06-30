@@ -107,7 +107,7 @@ export default function HomePage() {
     <div className="min-h-screen bg-[#f5f1e8] text-[#183225]">
 
       {/* ── Map section ── */}
-      <div className="relative h-[72svh] min-h-[520px] w-full sm:h-[75vh] sm:min-h-[500px]">
+      <div className="relative h-[78svh] min-h-[560px] w-full sm:h-[80vh] sm:min-h-[540px]">
         <div className="absolute inset-0">
           <MapComponent
             projects={projects}
@@ -122,80 +122,80 @@ export default function HomePage() {
           />
         </div>
 
-        {/* Liquid glass controls */}
-        <header
-          className="absolute left-1/2 top-2 z-[1200] flex w-[calc(100%-0.75rem)] max-w-5xl -translate-x-1/2 flex-col items-center gap-2 rounded-[24px] border border-white/60 bg-[#fffaf1]/76 px-3 py-2.5 shadow-[0_18px_48px_rgba(68,79,58,0.18),inset_0_1px_0_rgba(255,255,255,0.92)] backdrop-blur-2xl sm:top-4 sm:w-[min(1040px,calc(100%-3rem))] sm:gap-3 sm:rounded-[30px] sm:px-4 sm:py-3"
-        >
-          <div className="flex w-full items-center justify-between gap-2 sm:gap-3">
-            <div className="flex min-w-0 items-center justify-start gap-2.5 text-left sm:gap-3">
-              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-2xl border border-[#5f8f49]/20 bg-[#5f8f49]/12 shadow-[inset_0_1px_0_rgba(255,255,255,0.8)] sm:h-10 sm:w-10">
-                <Leaf className="h-4 w-4 text-[#4f7f3f]" />
+        {/* Compact map controls */}
+        <div className="pointer-events-none absolute left-0 right-0 top-0 z-[1200] px-3 pt-3 sm:px-5 sm:pt-5">
+          <div className="mx-auto flex max-w-7xl flex-col gap-2 lg:flex-row lg:items-start lg:justify-between">
+            <header className="pointer-events-auto flex min-w-0 items-center justify-between gap-3 rounded-2xl border border-white/60 bg-[#fffaf1]/82 px-3 py-2.5 shadow-[0_14px_36px_rgba(68,79,58,0.16),inset_0_1px_0_rgba(255,255,255,0.92)] backdrop-blur-2xl lg:w-[410px]">
+              <div className="flex min-w-0 items-center gap-2.5 text-left">
+                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-[#5f8f49]/20 bg-[#5f8f49]/12 shadow-[inset_0_1px_0_rgba(255,255,255,0.8)]">
+                  <Leaf className="h-4 w-4 text-[#4f7f3f]" />
+                </div>
+                <div className="min-w-0">
+                  <h1 className="truncate text-sm font-semibold leading-none text-[#183225] sm:text-base">Māngere Taiao Restoration</h1>
+                  <p className="mt-1 truncate text-[11px] leading-none text-[#183225]/48">Auckland, New Zealand</p>
+                </div>
               </div>
-              <div className="min-w-0">
-                <h1 className="truncate text-sm font-semibold leading-none text-[#183225] sm:text-base">Māngere Taiao Restoration</h1>
-                <p className="mt-1 truncate text-[11px] leading-none text-[#183225]/48">Auckland, New Zealand</p>
+              <div className="flex shrink-0 items-center gap-1.5">
+                <div className="hidden items-center gap-1 rounded-full border border-[#5c6f55]/12 bg-white/48 px-2.5 py-1 text-xs text-[#183225]/52 sm:flex">
+                  <MapPin className="h-3 w-3" />
+                  <span>{projects.length} site{projects.length !== 1 ? 's' : ''}</span>
+                </div>
+                <AuthButton />
               </div>
-            </div>
-            <div className="flex shrink-0 items-center justify-end gap-1.5 sm:gap-2">
-              <div className="flex items-center gap-1 rounded-full border border-[#5c6f55]/12 bg-white/48 px-2 py-1 text-[11px] text-[#183225]/52 sm:gap-1.5 sm:px-2.5 sm:text-xs">
-                <MapPin className="h-3 w-3" />
-                <span>{projects.length} site{projects.length !== 1 ? 's' : ''}</span>
-              </div>
-              <AuthButton />
-            </div>
-          </div>
+            </header>
 
-          <form
-            className="grid w-full grid-cols-[minmax(0,1fr)_118px] gap-2 sm:grid-cols-[minmax(0,1fr)_180px]"
-            onSubmit={e => {
-              e.preventDefault()
-              setSearchQuery(searchInput)
-            }}
-          >
-            <div className="relative">
-              <Search className="absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-[#183225]/42" />
-              <input
-                type="text"
-                placeholder="Search locations in Māngere…"
-                value={searchInput}
-                onChange={e => setSearchInput(e.target.value)}
-                className="h-11 w-full rounded-2xl border border-[#5c6f55]/14 bg-white/60 pl-10 pr-16 text-[16px] text-[#183225] outline-none transition-[background-color,border-color,box-shadow] duration-200 placeholder:text-[#183225]/38 focus:border-[#5f8f49]/38 focus:bg-white focus:shadow-[0_0_0_4px_rgba(95,143,73,0.08)] sm:pr-20 sm:text-sm"
-              />
-              {searchInput && (
+            <form
+              className="pointer-events-auto grid w-full grid-cols-[minmax(0,1fr)_118px] gap-2 rounded-2xl border border-white/60 bg-[#fffaf1]/82 p-2 shadow-[0_14px_36px_rgba(68,79,58,0.16),inset_0_1px_0_rgba(255,255,255,0.92)] backdrop-blur-2xl sm:grid-cols-[minmax(0,1fr)_170px] lg:max-w-[680px]"
+              onSubmit={e => {
+                e.preventDefault()
+                setSearchQuery(searchInput)
+              }}
+            >
+              <div className="relative">
+                <Search className="absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-[#183225]/42" />
+                <input
+                  type="text"
+                  placeholder="Search Māngere…"
+                  value={searchInput}
+                  onChange={e => setSearchInput(e.target.value)}
+                  className="h-10 w-full rounded-xl border border-[#5c6f55]/14 bg-white/66 pl-10 pr-16 text-[16px] text-[#183225] outline-none transition-[background-color,border-color,box-shadow] duration-200 placeholder:text-[#183225]/38 focus:border-[#5f8f49]/38 focus:bg-white focus:shadow-[0_0_0_4px_rgba(95,143,73,0.08)] sm:pr-20 sm:text-sm"
+                />
+                {searchInput && (
+                  <button
+                    type="button"
+                    onClick={() => { setSearchInput(''); setSearchQuery('') }}
+                    className="absolute right-10 top-1/2 rounded-full p-1 text-[#183225]/38 transition-[background-color,color,transform] duration-150 ease-out hover:bg-[#5f8f49]/10 hover:text-[#183225] active:scale-95 sm:right-12"
+                    aria-label="Clear search"
+                  >
+                    <X className="h-3.5 w-3.5" />
+                  </button>
+                )}
                 <button
-                  type="button"
-                  onClick={() => { setSearchInput(''); setSearchQuery('') }}
-                  className="absolute right-10 top-1/2 rounded-full p-1 text-[#183225]/38 transition-[background-color,color,transform] duration-150 ease-out hover:bg-[#5f8f49]/10 hover:text-[#183225] active:scale-95 sm:right-12"
-                  aria-label="Clear search"
+                  type="submit"
+                  className="absolute right-1.5 top-1/2 flex h-7 min-w-8 -translate-y-1/2 items-center justify-center rounded-lg bg-[#5f8f49] px-2 text-xs font-semibold text-white shadow-[0_8px_18px_rgba(95,143,73,0.22)] transition-[background-color,box-shadow,transform] duration-150 ease-out hover:bg-[#4f7f3f] active:scale-[0.97] sm:h-8 sm:min-w-9 sm:px-3"
+                  aria-label="Search map"
                 >
-                  <X className="h-3.5 w-3.5" />
+                  Go
                 </button>
-              )}
-              <button
-                type="submit"
-                className="absolute right-1.5 top-1/2 flex h-8 min-w-8 -translate-y-1/2 items-center justify-center rounded-xl bg-[#5f8f49] px-2 text-xs font-semibold text-white shadow-[0_8px_18px_rgba(95,143,73,0.22)] transition-[background-color,box-shadow,transform] duration-150 ease-out hover:bg-[#4f7f3f] active:scale-[0.97] sm:h-9 sm:min-w-9 sm:px-3"
-                aria-label="Search map"
-              >
-                Go
-              </button>
-            </div>
+              </div>
 
-            <div className="relative">
-              <Layers className="absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-[#183225]/42" />
-              <select
-                value={filterType}
-                onChange={e => setFilterType(e.target.value)}
-                className="h-11 w-full appearance-none rounded-2xl border border-[#5c6f55]/14 bg-white/60 pl-9 pr-2 text-[16px] text-[#183225] outline-none transition-[background-color,border-color,box-shadow] duration-200 focus:border-[#5f8f49]/38 focus:bg-white focus:shadow-[0_0_0_4px_rgba(95,143,73,0.08)] sm:pl-10 sm:pr-4 sm:text-sm"
-              >
-                {PROJECT_TYPES.map(t => (
-                  <option key={t} value={t} className="bg-[#fffaf1] text-[#183225]">
-                    {t === 'all' ? 'All types' : t.charAt(0).toUpperCase() + t.slice(1)}
-                  </option>
-                ))}
-              </select>
-            </div>
-          </form>
-        </header>
+              <div className="relative">
+                <Layers className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#183225]/42" />
+                <select
+                  value={filterType}
+                  onChange={e => setFilterType(e.target.value)}
+                  className="h-10 w-full appearance-none rounded-xl border border-[#5c6f55]/14 bg-white/66 pl-8 pr-2 text-[16px] text-[#183225] outline-none transition-[background-color,border-color,box-shadow] duration-200 focus:border-[#5f8f49]/38 focus:bg-white focus:shadow-[0_0_0_4px_rgba(95,143,73,0.08)] sm:pl-9 sm:pr-4 sm:text-sm"
+                >
+                  {PROJECT_TYPES.map(t => (
+                    <option key={t} value={t} className="bg-[#fffaf1] text-[#183225]">
+                      {t === 'all' ? 'All types' : t.charAt(0).toUpperCase() + t.slice(1)}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </form>
+          </div>
+        </div>
 
         {/* Creating overlay */}
         {creatingProject && (

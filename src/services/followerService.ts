@@ -1,5 +1,39 @@
 import { createClient } from '@/lib/supabase/client'
 
+const GUEST_PROJECT_FOLLOWS_STORAGE_KEY = 'mangere-project-follows'
+
+function readGuestProjectFollows(): string[] {
+  if (typeof window === 'undefined') return []
+  try {
+    const raw = window.localStorage.getItem(GUEST_PROJECT_FOLLOWS_STORAGE_KEY)
+    const parsed = raw ? JSON.parse(raw) : []
+    return Array.isArray(parsed) ? parsed.filter((item): item is string => typeof item === 'string') : []
+  } catch {
+    return []
+  }
+}
+
+function writeGuestProjectFollows(projectIds: string[]) {
+  if (typeof window === 'undefined') return
+  try {
+    window.localStorage.setItem(GUEST_PROJECT_FOLLOWS_STORAGE_KEY, JSON.stringify([...new Set(projectIds)]))
+  } catch {
+    // Guest follows are a local convenience; signed-in follows still persist through Supabase.
+  }
+}
+
+export function isGuestFollowingProject(projectId: string): boolean {
+  return readGuestProjectFollows().includes(projectId)
+}
+
+export function followGuestProject(projectId: string): void {
+  writeGuestProjectFollows([...readGuestProjectFollows(), projectId])
+}
+
+export function unfollowGuestProject(projectId: string): void {
+  writeGuestProjectFollows(readGuestProjectFollows().filter(id => id !== projectId))
+}
+
 export async function fetchFollowerCount(projectId: string): Promise<number> {
   const supabase = createClient()
   const { count } = await supabase

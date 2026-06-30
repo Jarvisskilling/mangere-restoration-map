@@ -97,7 +97,7 @@ export default function CreateEventFromMapModal({
               type={allDay ? 'date' : 'datetime-local'}
               value={start}
               onChange={e => setStart(e.target.value)}
-              className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-white outline-none focus:border-green-500/40 [color-scheme:dark]"
+              className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-white outline-none focus:border-green-500/40 [color-scheme:light]"
             />
           </div>
           <div>
@@ -106,7 +106,7 @@ export default function CreateEventFromMapModal({
               type={allDay ? 'date' : 'datetime-local'}
               value={end}
               onChange={e => setEnd(e.target.value)}
-              className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-white outline-none focus:border-green-500/40 [color-scheme:dark]"
+              className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-white outline-none focus:border-green-500/40 [color-scheme:light]"
             />
           </div>
         </div>
@@ -122,8 +122,8 @@ export default function CreateEventFromMapModal({
                     key={type}
                     type="button"
                     onClick={() => setEventType(type)}
-                    className={`px-3 py-1 rounded-full text-xs font-medium border transition-all ${
-                      active ? 'border-transparent text-white' : 'border-white/10 text-white/40 hover:text-white/70'
+                    className={`px-3 py-1 rounded-full text-xs font-medium transition-[background-color,border-color,color,box-shadow,transform] duration-150 ease-out active:scale-[0.97] ${
+                      active ? 'border border-transparent text-white' : 'liquid-glass-control text-white/40 hover:text-white/70'
                     }`}
                     style={active ? { backgroundColor: EVENT_TYPE_COLORS[type] } : {}}
                   >

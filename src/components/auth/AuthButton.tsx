@@ -55,7 +55,7 @@ export default function AuthButton() {
       {menuOpen && (
         <>
           <div className="fixed inset-0 z-40" onClick={() => setMenuOpen(false)} />
-          <div className="absolute right-0 top-full z-50 mt-2 w-48 rounded-2xl border border-[#5c6f55]/14 bg-[#fffaf1]/95 p-1 shadow-[0_18px_48px_rgba(67,76,57,0.18)] backdrop-blur-xl animate-fade-in">
+          <div className="liquid-glass-surface absolute right-0 top-full z-50 mt-2 w-48 rounded-2xl p-1 animate-fade-in">
             <div className="px-3 py-2 text-xs text-[#183225]/45 border-b border-[#5c6f55]/12 mb-1">
               {user?.email}
             </div>

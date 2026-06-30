@@ -18,6 +18,7 @@ import { EVENT_TYPE_COLORS } from '@/types'
 import Modal from '@/components/ui/Modal'
 import Button from '@/components/ui/Button'
 import EventDetailModal from './EventDetailModal'
+import NotificationPreferencesPanel from '@/components/notifications/NotificationPreferencesPanel'
 import { Calendar, Globe, Trash2 } from 'lucide-react'
 import toast from 'react-hot-toast'
 
@@ -222,12 +223,15 @@ export default function CommunityCalendar({ userId, isAuthenticated, onEventsCha
             </p>
           </div>
 
-          {isAuthenticated && (
-            <Button variant="primary" size="md" onClick={() => openCreate()} className="w-full sm:w-auto">
-              <Calendar className="h-4 w-4" />
-              Add event
-            </Button>
-          )}
+          <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row">
+            <NotificationPreferencesPanel userId={userId} isAuthenticated={isAuthenticated} />
+            {isAuthenticated && (
+              <Button variant="primary" size="md" onClick={() => openCreate()} className="w-full sm:w-auto">
+                <Calendar className="h-4 w-4" />
+                Add event
+              </Button>
+            )}
+          </div>
         </div>
 
         {/* Legend */}
@@ -246,7 +250,7 @@ export default function CommunityCalendar({ userId, isAuthenticated, onEventsCha
             <div className="h-7 w-7 animate-spin rounded-full border-2 border-green-500/20 border-t-green-500" />
           </div>
         ) : (
-          <div className="community-calendar rounded-3xl border border-[#5c6f55]/14 bg-[#fffaf1]/72 p-2 shadow-[0_18px_50px_rgba(68,79,58,0.12)] backdrop-blur-sm sm:p-4">
+          <div className="community-calendar liquid-glass-surface rounded-3xl p-2 sm:p-4">
             <FullCalendar
               plugins={[dayGridPlugin, timeGridPlugin, listPlugin, interactionPlugin]}
               initialView="dayGridMonth"
@@ -324,7 +328,7 @@ export default function CommunityCalendar({ userId, isAuthenticated, onEventsCha
                 type={form.allDay ? 'date' : 'datetime-local'}
                 value={form.start}
                 onChange={e => setForm(f => ({ ...f, start: e.target.value }))}
-                className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-white outline-none focus:border-green-500/40 [color-scheme:dark]"
+                className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-white outline-none focus:border-green-500/40 [color-scheme:light]"
               />
             </div>
             <div>
@@ -333,7 +337,7 @@ export default function CommunityCalendar({ userId, isAuthenticated, onEventsCha
                 type={form.allDay ? 'date' : 'datetime-local'}
                 value={form.end}
                 onChange={e => setForm(f => ({ ...f, end: e.target.value }))}
-                className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-white outline-none focus:border-green-500/40 [color-scheme:dark]"
+                className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-white outline-none focus:border-green-500/40 [color-scheme:light]"
               />
             </div>
           </div>
@@ -344,10 +348,10 @@ export default function CommunityCalendar({ userId, isAuthenticated, onEventsCha
               <select
                 value={form.eventType}
                 onChange={e => setForm(f => ({ ...f, eventType: e.target.value as EventType }))}
-                className="w-full rounded-lg border border-white/10 bg-[#111] px-3 py-2 text-sm text-white outline-none"
+                className="liquid-glass-control w-full rounded-lg px-3 py-2 text-sm text-[#183225] outline-none"
               >
                 {Object.keys(EVENT_TYPE_COLORS).map(type => (
-                  <option key={type} value={type} className="bg-[#111]">
+                  <option key={type} value={type} className="bg-[#fffaf1] text-[#183225]">
                     {type.charAt(0).toUpperCase() + type.slice(1)}
                   </option>
                 ))}

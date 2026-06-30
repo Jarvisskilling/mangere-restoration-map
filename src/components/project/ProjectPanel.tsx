@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react'
 import {
-  X, Check, Trash2, Bell, BellOff,
+  X, Check, Trash2, Bell, BellOff, CalendarCheck,
   Users, TreePine, Clock, MapPin, Eye, Plus, ChevronDown, Pencil,
 } from 'lucide-react'
 import FullCalendar from '@fullcalendar/react'
@@ -27,8 +27,16 @@ import {
   checkIsFollowing,
   followProject,
   unfollowProject,
+  followGuestProject,
+  isGuestFollowingProject,
+  unfollowGuestProject,
 } from '@/services/followerService'
-import type { Project, ProjectEvent, ProjectObservation, EventType, ProjectType } from '@/types'
+import {
+  fetchEventSignupSummaries,
+  followEvent,
+  unfollowEvent,
+} from '@/services/notificationService'
+import type { EventSignupSummary, Project, ProjectEvent, ProjectObservation, EventType, ProjectType } from '@/types'
 import { EVENT_TYPE_COLORS, PROJECT_TYPE_LABELS, PROJECT_TYPE_COLORS, PROJECT_TYPE_DEFAULT_NAMES } from '@/types'
 import Button from '@/components/ui/Button'
 import Modal from '@/components/ui/Modal'
@@ -73,10 +81,10 @@ function StatCard({
 
   return (
     <div
-      className={`relative group rounded-2xl border p-4 transition-all duration-300 overflow-hidden ${
+      className={`liquid-glass-card relative group overflow-hidden rounded-2xl p-4 transition-[background-color,border-color,box-shadow,transform] duration-200 ease-out ${
         editable
-          ? 'border-white/8 bg-white/[0.03] hover:bg-white/[0.05] hover:border-white/12 cursor-pointer hover:-translate-y-0.5 hover:shadow-glass'
-          : 'border-white/6 bg-white/[0.02]'
+          ? 'cursor-pointer hover:-translate-y-0.5 hover:shadow-[0_16px_34px_rgba(68,79,58,0.14)]'
+          : ''
       }`}
       onClick={() => { if (editable && !editing) { setDraft(String(value)); setEditing(true) } }}
     >
@@ -129,6 +137,7 @@ export default function ProjectPanel({
   const [trees, setTrees] = useState(project.trees_planted)
   const [hours, setHours] = useState(project.volunteer_hours ?? 0)
   const [events, setEvents] = useState<ProjectEvent[]>([])
+  const [eventSignupSummaries, setEventSignupSummaries] = useState<Record<string, EventSignupSummary>>({})
   const [observations, setObservations] = useState<ProjectObservation[]>([])
   const [followerCount, setFollowerCount] = useState(0)
   const [isFollowing, setIsFollowing] = useState(false)
@@ -153,12 +162,39 @@ export default function ProjectPanel({
   const isOwner = !!userId && project.created_by === userId
 
   useEffect(() => {
+    let alive = true
     fetchProjectStory(project.id).then(s => { if (s) setStory(s.content) })
     fetchProjectEvents(project.id).then(setEvents)
     fetchProjectObservations(project.id).then(setObservations)
-    fetchFollowerCount(project.id).then(setFollowerCount)
-    if (isAuthenticated && userId) checkIsFollowing(project.id, userId).then(setIsFollowing)
+    fetchFollowerCount(project.id).then(count => {
+      if (!alive) return
+      const guestFollowing = !userId && isGuestFollowingProject(project.id)
+      setFollowerCount(count + (guestFollowing ? 1 : 0))
+      setIsFollowing(guestFollowing)
+    })
+    if (isAuthenticated && userId) {
+      checkIsFollowing(project.id, userId).then(following => {
+        if (alive) setIsFollowing(following)
+      })
+    }
+
+    return () => { alive = false }
   }, [project.id, userId, isAuthenticated])
+
+  useEffect(() => {
+    const ids = events.map(event => event.id)
+    if (ids.length === 0) {
+      setEventSignupSummaries({})
+      return
+    }
+
+    let alive = true
+    fetchEventSignupSummaries('project', ids, userId)
+      .then(summaries => { if (alive) setEventSignupSummaries(summaries) })
+      .catch(() => {})
+
+    return () => { alive = false }
+  }, [events, userId])
 
   useEffect(() => {
     const el = storyRef.current
@@ -231,15 +267,19 @@ export default function ProjectPanel({
   }
 
   const handleFollow = async () => {
-    if (!isAuthenticated || !userId || followLoading) return
+    if (followLoading) return
     setFollowLoading(true)
     try {
       if (isFollowing) {
-        await unfollowProject(project.id, userId); setIsFollowing(false); setFollowerCount(c => Math.max(0, c - 1))
-        toast('Unfollowed', { icon: '👋' })
+        if (userId) await unfollowProject(project.id, userId)
+        else unfollowGuestProject(project.id)
+        setIsFollowing(false); setFollowerCount(c => Math.max(0, c - 1))
+        toast.success(userId ? 'Unfollowed project' : 'Unfollowed on this device')
       } else {
-        await followProject(project.id, userId); setIsFollowing(true); setFollowerCount(c => c + 1)
-        toast.success("Following — you'll be notified when events are added")
+        if (userId) await followProject(project.id, userId)
+        else followGuestProject(project.id)
+        setIsFollowing(true); setFollowerCount(c => c + 1)
+        toast.success(userId ? "Following — you'll be notified when events are added" : 'Following on this device')
       }
     } catch { toast.error('Failed') } finally { setFollowLoading(false) }
   }
@@ -280,6 +320,29 @@ export default function ProjectPanel({
     } catch { toast.error('Failed to delete event') }
   }
 
+  const handleEventSignup = async (evt: ProjectEvent) => {
+    const current = eventSignupSummaries[evt.id] ?? { count: 0, signedUp: false }
+    try {
+      if (current.signedUp) {
+        await unfollowEvent('project', evt.id, userId)
+        setEventSignupSummaries(prev => ({
+          ...prev,
+          [evt.id]: { count: Math.max(0, current.count - 1), signedUp: false },
+        }))
+        toast.success(userId ? 'Removed from event' : 'Unfollowed on this device')
+      } else {
+        const mode = await followEvent('project', evt.id, userId)
+        setEventSignupSummaries(prev => ({
+          ...prev,
+          [evt.id]: { count: current.count + 1, signedUp: true },
+        }))
+        toast.success(mode === 'account' ? 'Following event' : 'Following on this device')
+      }
+    } catch {
+      toast.error('Failed to update follow')
+    }
+  }
+
   const handleSaveObservation = async () => {
     if (!obsContent.trim() || !userId) return
     setSavingObs(true)
@@ -303,19 +366,13 @@ export default function ProjectPanel({
     <>
       {/* Backdrop */}
       <div className="fixed inset-0 z-[1400] animate-fade-in" onClick={onClose}
-        style={{ background: 'rgba(31,47,34,0.22)', backdropFilter: 'blur(6px)' }} />
+        style={{ background: 'rgba(31,47,34,0.18)', backdropFilter: 'blur(8px)' }} />
 
       {/* Panel */}
-      <div className="friendly-project-panel fixed right-0 top-0 bottom-0 z-[1500] w-full sm:w-[520px] flex flex-col overflow-y-auto animate-slide-in-right shadow-[0_0_80px_rgba(67,76,57,0.2)]"
-        style={{ background: 'linear-gradient(160deg, #fffaf1 0%, #f2eadf 100%)', borderLeft: '1px solid rgba(72,91,66,0.14)' }}>
-
-        {/* Ambient header glow */}
-        <div className="pointer-events-none absolute top-0 left-0 right-0 h-64 opacity-30"
-          style={{ background: `radial-gradient(ellipse at 30% 0%, ${PROJECT_TYPE_COLORS[projectType]}32 0%, transparent 70%)` }} />
+      <div className="friendly-project-panel liquid-glass-panel fixed right-0 top-0 bottom-0 z-[1500] w-full sm:w-[540px] flex flex-col overflow-y-auto animate-slide-in-right">
 
         {/* ── HEADER ── */}
-        <div className="sticky top-0 z-10 px-6 pt-7 pb-5"
-          style={{ background: 'linear-gradient(to bottom, rgba(255,250,241,0.96) 62%, rgba(255,250,241,0))', backdropFilter: 'blur(18px)' }}>
+        <div className="sticky top-0 z-10 border-b border-white/40 bg-[#fffaf1]/54 px-6 pt-7 pb-5 shadow-[0_12px_28px_rgba(68,79,58,0.06)] backdrop-blur-2xl">
           <div className="flex items-start justify-between gap-4">
             <div className="flex-1 min-w-0 relative">
               <input
@@ -341,26 +398,24 @@ export default function ProjectPanel({
 
             {/* Action buttons */}
             <div className="flex items-center gap-1.5 shrink-0 mt-0.5">
-              {isAuthenticated && (
-                <button
-                  onClick={handleFollow}
-                  disabled={followLoading}
-                  title={isFollowing ? 'Unfollow' : 'Follow project'}
-                  className={`flex items-center gap-1.5 rounded-xl px-2.5 py-1.5 text-[11px] font-medium transition-all duration-200 border ${
-                    isFollowing
-                      ? 'border-green-500/25 bg-green-500/8 text-green-400 hover:bg-red-500/8 hover:border-red-500/20 hover:text-red-400'
-                      : 'border-white/8 bg-white/3 text-white/35 hover:bg-white/6 hover:text-white/60 hover:border-white/12'
-                  }`}
-                >
-                  {isFollowing ? <BellOff className="h-3 w-3" /> : <Bell className="h-3 w-3" />}
-                  {isFollowing ? 'Following' : 'Follow'}
-                  {followerCount > 0 && <span className="opacity-50 text-[10px]">{followerCount}</span>}
-                </button>
-              )}
+              <button
+                onClick={handleFollow}
+                disabled={followLoading}
+                title={isFollowing ? 'Unfollow' : 'Follow project'}
+                className={`liquid-glass-control flex items-center gap-1.5 rounded-xl px-2.5 py-1.5 text-[11px] font-medium transition-[background-color,border-color,color,transform,opacity] duration-150 ease-out active:scale-[0.97] disabled:opacity-50 disabled:active:scale-100 ${
+                  isFollowing
+                    ? 'text-green-600 hover:text-red-600'
+                    : 'text-white/35 hover:text-white/60'
+                }`}
+              >
+                {isFollowing ? <BellOff className="h-3 w-3" /> : <Bell className="h-3 w-3" />}
+                {isFollowing ? 'Following' : 'Follow'}
+                {followerCount > 0 && <span className="opacity-50 text-[10px]">{followerCount}</span>}
+              </button>
 
               {isOwner && !confirmDelete && (
                 <button onClick={() => setConfirmDelete(true)}
-                  className="h-8 w-8 rounded-xl border border-white/6 bg-white/[0.02] flex items-center justify-center text-white/20 hover:text-red-400 hover:bg-red-500/6 hover:border-red-500/15 transition-all duration-200">
+                  className="liquid-glass-control h-8 w-8 rounded-xl flex items-center justify-center text-white/20 transition-[background-color,border-color,color,transform] duration-150 ease-out hover:text-red-500 active:scale-[0.97]">
                   <Trash2 className="h-3.5 w-3.5" />
                 </button>
               )}
@@ -373,7 +428,7 @@ export default function ProjectPanel({
               )}
 
               <button onClick={onClose}
-                className="h-8 w-8 rounded-xl border border-white/6 bg-white/[0.02] flex items-center justify-center text-white/25 hover:text-white hover:bg-white/6 hover:border-white/10 transition-all duration-200">
+                className="liquid-glass-control h-8 w-8 rounded-xl flex items-center justify-center text-white/25 transition-[background-color,border-color,color,transform] duration-150 ease-out hover:text-white active:scale-[0.97]">
                 <X className="h-3.5 w-3.5" />
               </button>
             </div>
@@ -391,8 +446,8 @@ export default function ProjectPanel({
                 <button
                   key={type}
                   onClick={() => isOwner && handleTypeChange(type)}
-                  className={`px-3.5 py-1.5 rounded-full text-[11px] font-medium transition-all duration-200 border ${
-                    active ? 'border-transparent text-black' : 'border-white/8 text-white/30 hover:text-white/55 hover:border-white/14'
+                  className={`px-3.5 py-1.5 rounded-full text-[11px] font-medium transition-[background-color,border-color,color,box-shadow,transform] duration-150 ease-out active:scale-[0.97] ${
+                    active ? 'border border-transparent text-black' : 'liquid-glass-control text-white/30 hover:text-white/55'
                   } ${!isOwner ? 'cursor-default' : 'cursor-pointer'}`}
                   style={active ? {
                     backgroundColor: color,
@@ -427,7 +482,7 @@ export default function ProjectPanel({
         </div>
 
         {/* Divider */}
-        <div className="mx-6 h-px bg-white/[0.05] mb-7" />
+        <div className="mx-6 h-px bg-[#5c6f55]/12 mb-7" />
 
         {/* ── OVERVIEW ── */}
         <div className="px-6 pb-7">
@@ -440,10 +495,10 @@ export default function ProjectPanel({
                 placeholder="Describe this restoration site — ecosystem, history, goals, what makes it special…"
                 rows={4}
                 readOnly={!isOwner}
-                className={`w-full resize-none rounded-2xl text-sm text-white/75 placeholder-white/15 outline-none leading-relaxed transition-all duration-200 px-4 py-3.5 ${
+                className={`w-full resize-none rounded-2xl text-sm text-white/75 placeholder-white/15 outline-none leading-relaxed transition-[background-color,border-color,box-shadow] duration-200 px-4 py-3.5 ${
                   isOwner
-                    ? 'bg-white/[0.03] border border-white/6 focus:bg-white/[0.05] focus:border-white/12'
-                    : 'bg-transparent border border-white/4 cursor-default'
+                    ? 'liquid-glass-control'
+                    : 'liquid-glass-card cursor-default'
                 }`}
               />
               {isOwner && (
@@ -463,10 +518,10 @@ export default function ProjectPanel({
                   onChange={e => handleContactChange(e.target.value)}
                   placeholder="Name, email, or phone…"
                   readOnly={!isOwner}
-                  className={`w-full rounded-xl text-sm text-white/70 placeholder-white/15 outline-none transition-all duration-200 px-4 py-2.5 ${
+                  className={`w-full rounded-xl text-sm text-white/70 placeholder-white/15 outline-none transition-[background-color,border-color,box-shadow] duration-200 px-4 py-2.5 ${
                     isOwner
-                      ? 'bg-white/[0.03] border border-white/6 focus:bg-white/[0.05] focus:border-white/12'
-                      : 'bg-transparent border border-white/4 cursor-default'
+                      ? 'liquid-glass-control'
+                      : 'liquid-glass-card cursor-default'
                   }`}
                 />
                 {!isOwner && <p className="mt-1.5 text-[9px] text-white/18">Project contact</p>}
@@ -476,7 +531,7 @@ export default function ProjectPanel({
         </div>
 
         {/* Divider */}
-        <div className="mx-6 h-px bg-white/[0.05] mb-7" />
+        <div className="mx-6 h-px bg-[#5c6f55]/12 mb-7" />
 
         {/* ── EVENTS ── */}
         <div className="px-6 pb-7">
@@ -485,7 +540,7 @@ export default function ProjectPanel({
             {isOwner && (
               <button
                 onClick={openNewEvent}
-                className="flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-[11px] font-medium border border-green-500/20 bg-green-500/6 text-green-400 hover:bg-green-500/12 hover:border-green-500/35 transition-all duration-200"
+                className="liquid-glass-control flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-[11px] font-medium text-green-600 transition-[background-color,border-color,color,transform] duration-150 ease-out hover:text-green-700 active:scale-[0.97]"
                 style={{ boxShadow: '0 0 12px rgba(74,222,128,0.08)' }}
               >
                 <Plus className="h-3 w-3" /> Add event
@@ -494,9 +549,9 @@ export default function ProjectPanel({
           </div>
 
           {upcomingEvents.length === 0 && pastEvents.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-10 rounded-2xl border border-white/5 bg-white/[0.01]">
-              <div className="h-10 w-10 rounded-full border border-white/8 bg-white/3 flex items-center justify-center mb-3">
-                <span className="text-lg">🌱</span>
+            <div className="liquid-glass-card flex flex-col items-center justify-center py-10 rounded-2xl">
+              <div className="liquid-glass-control h-10 w-10 rounded-full flex items-center justify-center mb-3">
+                <TreePine className="h-4 w-4 text-[#5f8f49]" />
               </div>
               <p className="text-sm text-white/25 font-medium">No events yet</p>
               {isOwner && <p className="text-xs text-white/15 mt-1">Add the first one above</p>}
@@ -504,7 +559,14 @@ export default function ProjectPanel({
           ) : (
             <div className="space-y-2">
               {upcomingEvents.map(evt => (
-                <EventRow key={evt.id} evt={evt} isOwner={isOwner} onEdit={openEditEvent} />
+                <EventRow
+                  key={evt.id}
+                  evt={evt}
+                  isOwner={isOwner}
+                  signup={eventSignupSummaries[evt.id]}
+                  onEdit={openEditEvent}
+                  onToggleSignup={handleEventSignup}
+                />
               ))}
 
               {pastEvents.length > 0 && (
@@ -519,7 +581,15 @@ export default function ProjectPanel({
                   {showPastEvents && (
                     <div className="space-y-2 animate-fade-in opacity-50">
                       {pastEvents.map(evt => (
-                        <EventRow key={evt.id} evt={evt} isOwner={isOwner} onEdit={openEditEvent} past />
+                        <EventRow
+                          key={evt.id}
+                          evt={evt}
+                          isOwner={isOwner}
+                          signup={eventSignupSummaries[evt.id]}
+                          onEdit={openEditEvent}
+                          onToggleSignup={handleEventSignup}
+                          past
+                        />
                       ))}
                     </div>
                   )}
@@ -530,7 +600,7 @@ export default function ProjectPanel({
         </div>
 
         {/* Divider */}
-        <div className="mx-6 h-px bg-white/[0.05] mb-7" />
+        <div className="mx-6 h-px bg-[#5c6f55]/12 mb-7" />
 
         {/* ── OBSERVATIONS ── */}
         <div className="px-6 pb-7">
@@ -539,7 +609,7 @@ export default function ProjectPanel({
             {isAuthenticated && (
               <button
                 onClick={() => setShowObsForm(v => !v)}
-                className="flex items-center gap-1.5 rounded-xl px-2.5 py-1.5 text-[11px] font-medium border border-white/6 bg-white/[0.02] text-white/30 hover:text-white/55 hover:bg-white/5 hover:border-white/10 transition-all duration-200"
+                className="liquid-glass-control flex items-center gap-1.5 rounded-xl px-2.5 py-1.5 text-[11px] font-medium text-white/30 transition-[background-color,border-color,color,transform] duration-150 ease-out hover:text-white/55 active:scale-[0.97]"
               >
                 <Eye className="h-3 w-3" /> Record
               </button>
@@ -547,12 +617,12 @@ export default function ProjectPanel({
           </div>
 
           {showObsForm && (
-            <div className="mb-4 rounded-2xl border border-white/8 bg-white/[0.03] p-4 space-y-3 animate-fade-up">
+            <div className="liquid-glass-card mb-4 rounded-2xl p-4 space-y-3 animate-fade-up">
               <input
                 type="date"
                 value={obsDate}
                 onChange={e => setObsDate(e.target.value)}
-                className="w-full rounded-xl border border-white/8 bg-white/[0.03] px-3 py-2 text-xs text-white/70 outline-none focus:border-white/15 [color-scheme:dark] transition-all"
+                className="liquid-glass-control w-full rounded-xl px-3 py-2 text-xs text-white/70 outline-none [color-scheme:light] transition-[background-color,border-color,box-shadow]"
               />
               <textarea
                 autoFocus
@@ -560,7 +630,7 @@ export default function ProjectPanel({
                 onChange={e => setObsContent(e.target.value)}
                 placeholder="What did you observe? Species, plant health, environmental conditions, changes since last visit…"
                 rows={3}
-                className="w-full resize-none rounded-xl border border-white/8 bg-white/[0.03] px-3 py-2.5 text-sm text-white/75 placeholder-white/18 outline-none focus:border-white/15 leading-relaxed transition-all"
+                className="liquid-glass-control w-full resize-none rounded-xl px-3 py-2.5 text-sm text-white/75 placeholder-white/18 outline-none leading-relaxed transition-[background-color,border-color,box-shadow]"
               />
               <div className="flex justify-end gap-2">
                 <button onClick={() => { setShowObsForm(false); setObsContent('') }}
@@ -579,13 +649,13 @@ export default function ProjectPanel({
           )}
 
           {observations.length === 0 && !showObsForm ? (
-            <div className="flex flex-col items-center justify-center py-8 rounded-2xl border border-white/5 bg-white/[0.01]">
+            <div className="liquid-glass-card flex flex-col items-center justify-center py-8 rounded-2xl">
               <p className="text-sm text-white/20">No observations yet</p>
             </div>
           ) : (
             <div className="space-y-2.5">
               {observations.map(obs => (
-                <div key={obs.id} className="group rounded-2xl border border-white/6 bg-white/[0.02] px-4 py-3.5 transition-all duration-200 hover:bg-white/[0.035] hover:border-white/8">
+                <div key={obs.id} className="liquid-glass-card group rounded-2xl px-4 py-3.5 transition-[background-color,border-color,box-shadow] duration-200">
                   <div className="flex items-start justify-between gap-3 mb-2">
                     <span className="text-[9px] uppercase tracking-[0.14em] text-white/25 font-medium pt-0.5">
                       {new Date(obs.observed_at + 'T12:00').toLocaleDateString('en-NZ', { day: 'numeric', month: 'long', year: 'numeric' })}
@@ -607,7 +677,7 @@ export default function ProjectPanel({
         </div>
 
         {/* Divider */}
-        <div className="mx-6 h-px bg-white/[0.05] mb-7" />
+        <div className="mx-6 h-px bg-[#5c6f55]/12 mb-7" />
 
         {/* ── STORY ── */}
         <div className="px-6 pb-10">
@@ -621,10 +691,10 @@ export default function ProjectPanel({
             onChange={e => handleStoryChange(e.target.value)}
             placeholder="Tell the story of this place — how it began, what's been planted, wildlife returning, community that shaped it…"
             readOnly={!isAuthenticated}
-            className={`w-full min-h-[140px] resize-none rounded-2xl text-sm text-white/70 placeholder-white/12 outline-none leading-relaxed transition-all duration-200 px-4 py-3.5 ${
+            className={`w-full min-h-[140px] resize-none rounded-2xl text-sm text-white/70 placeholder-white/12 outline-none leading-relaxed transition-[background-color,border-color,box-shadow] duration-200 px-4 py-3.5 ${
               isAuthenticated
-                ? 'bg-white/[0.03] border border-white/6 focus:bg-white/[0.05] focus:border-white/12'
-                : 'bg-transparent border border-white/4 cursor-default'
+                ? 'liquid-glass-control'
+                : 'liquid-glass-card cursor-default'
             }`}
           />
           {isAuthenticated && <p className="mt-2 text-[9px] text-white/18 tracking-wide">Auto-saves as you type</p>}
@@ -651,7 +721,7 @@ export default function ProjectPanel({
                 ? new Date(selectedDate + 'T12:00').toLocaleDateString('en-NZ', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })
                 : 'Pick a date'}
             </label>
-            <div className="add-event-calendar rounded-xl border border-white/8 bg-black/20 overflow-hidden">
+            <div className="add-event-calendar liquid-glass-card rounded-xl overflow-hidden">
               <FullCalendar
                 plugins={[dayGridPlugin, interactionPlugin]}
                 initialView="dayGridMonth"
@@ -672,8 +742,8 @@ export default function ProjectPanel({
                 return (
                   <button key={type} type="button"
                     onClick={() => setEventForm(f => ({ ...f, eventType: type }))}
-                    className={`px-3 py-1.5 rounded-full text-[11px] font-medium border transition-all duration-200 ${
-                      active ? 'border-transparent text-white' : 'border-white/8 text-white/35 hover:text-white/60 hover:border-white/12'
+                    className={`px-3 py-1.5 rounded-full text-[11px] font-medium transition-[background-color,border-color,color,box-shadow,transform] duration-150 ease-out active:scale-[0.97] ${
+                      active ? 'border border-transparent text-white' : 'liquid-glass-control text-white/35 hover:text-white/60'
                     }`}
                     style={active ? { backgroundColor: EVENT_TYPE_COLORS[type], boxShadow: `0 0 12px ${EVENT_TYPE_COLORS[type]}40` } : {}}
                   >
@@ -696,7 +766,7 @@ export default function ProjectPanel({
             </button>
             <button
               onClick={handleSaveEvent} disabled={!eventForm.title || !selectedDate || savingEvent}
-              className="flex items-center gap-1.5 px-4 py-1.5 rounded-lg bg-green-500/15 border border-green-500/25 text-green-400 text-xs font-medium hover:bg-green-500/22 disabled:opacity-40 transition-all"
+              className="liquid-glass-control flex items-center gap-1.5 px-4 py-1.5 rounded-lg text-green-600 text-xs font-medium hover:text-green-700 disabled:opacity-40 transition-[background-color,border-color,color,transform] duration-150 ease-out active:scale-[0.97] disabled:active:scale-100"
               style={{ boxShadow: '0 0 12px rgba(74,222,128,0.1)' }}
             >
               <Check className="h-3.5 w-3.5" />
@@ -710,21 +780,68 @@ export default function ProjectPanel({
 }
 
 // ── Event row ─────────────────────────────────────────────────────────────────
-function EventRow({ evt, isOwner, onEdit, past }: { evt: ProjectEvent; isOwner: boolean; onEdit: (e: ProjectEvent) => void; past?: boolean }) {
+function EventRow({
+  evt,
+  isOwner,
+  signup,
+  onEdit,
+  onToggleSignup,
+  past,
+}: {
+  evt: ProjectEvent
+  isOwner: boolean
+  signup?: EventSignupSummary
+  onEdit: (e: ProjectEvent) => void
+  onToggleSignup: (e: ProjectEvent) => void
+  past?: boolean
+}) {
   const color = evt.color ?? EVENT_TYPE_COLORS[evt.event_type]
+  const signedUp = signup?.signedUp ?? false
+  const signupCount = signup?.count ?? 0
+
   return (
-    <button
-      onClick={() => isOwner && onEdit(evt)}
-      className={`w-full flex items-center gap-3 rounded-xl border px-3.5 py-2.5 text-left transition-all duration-200 ${
-        isOwner ? 'cursor-pointer hover:bg-white/[0.04] hover:border-white/10' : 'cursor-default'
-      } ${past ? 'border-white/4 bg-white/[0.01]' : 'border-white/6 bg-white/[0.02]'}`}
+    <div
+      className={`liquid-glass-card w-full flex items-center gap-3 rounded-xl px-3.5 py-2.5 text-left transition-[background-color,border-color,box-shadow] duration-200 ${
+        isOwner || !past
+          ? 'hover:shadow-[0_14px_30px_rgba(68,79,58,0.12)]'
+          : ''
+      } ${past ? 'opacity-70' : ''}`}
     >
       <span className="h-full w-0.5 rounded-full shrink-0 self-stretch min-h-[20px]" style={{ background: color, opacity: past ? 0.4 : 0.8 }} />
-      <span className={`flex-1 text-sm truncate ${past ? 'text-white/40' : 'text-white/65'}`}>{evt.title}</span>
+      <span className="min-w-0 flex-1">
+        <span className={`block truncate text-sm ${past ? 'text-white/40' : 'text-white/65'}`}>{evt.title}</span>
+        <span className="mt-1 flex items-center gap-1.5 text-[10px] text-white/25">
+          <Users className="h-3 w-3" />
+          {signupCount} following
+        </span>
+      </span>
       <span className="text-[10px] text-white/25 shrink-0 tabular-nums">
         {new Date(evt.start_date).toLocaleDateString('en-NZ', { day: 'numeric', month: 'short', year: 'numeric' })}
       </span>
-      {isOwner && !past && <Pencil className="h-2.5 w-2.5 text-white/15 shrink-0" />}
-    </button>
+      {!past && (
+        <button
+          type="button"
+          onClick={() => onToggleSignup(evt)}
+          className={`liquid-glass-control inline-flex shrink-0 items-center gap-1 rounded-lg px-2 py-1 text-[10px] font-medium transition-[background-color,border-color,color,transform] duration-150 ease-out active:scale-[0.97] ${
+            signedUp
+              ? 'text-green-600 hover:text-green-700'
+              : 'text-white/35 hover:text-white/60'
+          }`}
+        >
+          <CalendarCheck className="h-3 w-3" />
+          {signedUp ? 'Following' : 'Follow'}
+        </button>
+      )}
+      {isOwner && !past && (
+        <button
+          type="button"
+          onClick={() => onEdit(evt)}
+          aria-label="Edit event"
+          className="liquid-glass-control flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-white/20 transition-[background-color,border-color,color,transform] duration-150 ease-out hover:text-white/45 active:scale-[0.97]"
+        >
+          <Pencil className="h-3 w-3" />
+        </button>
+      )}
+    </div>
   )
 }

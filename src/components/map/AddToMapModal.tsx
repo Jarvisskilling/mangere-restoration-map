@@ -22,10 +22,10 @@ export default function AddToMapModal({
 
         <button
           onClick={onCreateProject}
-          className="w-full flex items-start gap-4 rounded-xl border border-white/10 bg-white/3 p-4 text-left hover:bg-white/6 hover:border-green-500/30 transition-all group"
+          className="liquid-glass-card group w-full flex items-start gap-4 rounded-xl p-4 text-left transition-[background-color,border-color,box-shadow,transform] duration-150 ease-out hover:shadow-[0_14px_30px_rgba(68,79,58,0.12)] active:scale-[0.99]"
         >
-          <div className="mt-0.5 flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl bg-green-500/10 border border-green-500/20 group-hover:bg-green-500/15 transition-colors">
-            <MapPin className="h-4 w-4 text-green-400" />
+          <div className="liquid-glass-control mt-0.5 flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl transition-colors">
+            <MapPin className="h-4 w-4 text-green-600" />
           </div>
           <div>
             <div className="text-sm font-semibold text-white">Restoration Project</div>
@@ -37,10 +37,10 @@ export default function AddToMapModal({
 
         <button
           onClick={onCreateEvent}
-          className="w-full flex items-start gap-4 rounded-xl border border-white/10 bg-white/3 p-4 text-left hover:bg-white/6 hover:border-blue-500/30 transition-all group"
+          className="liquid-glass-card group w-full flex items-start gap-4 rounded-xl p-4 text-left transition-[background-color,border-color,box-shadow,transform] duration-150 ease-out hover:shadow-[0_14px_30px_rgba(68,79,58,0.12)] active:scale-[0.99]"
         >
-          <div className="mt-0.5 flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl bg-blue-500/10 border border-blue-500/20 group-hover:bg-blue-500/15 transition-colors">
-            <Calendar className="h-4 w-4 text-blue-400" />
+          <div className="liquid-glass-control mt-0.5 flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl transition-colors">
+            <Calendar className="h-4 w-4 text-blue-600" />
           </div>
           <div>
             <div className="text-sm font-semibold text-white">Community Event</div>

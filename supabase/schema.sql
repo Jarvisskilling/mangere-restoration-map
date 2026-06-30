@@ -85,10 +85,66 @@ CREATE TABLE IF NOT EXISTS public.community_events (
   event_type TEXT DEFAULT 'other' NOT NULL
     CHECK (event_type IN ('planting','cleanup','meetup','gathering','monitoring','other')),
   location TEXT,
+  latitude DOUBLE PRECISION,
+  longitude DOUBLE PRECISION,
   color TEXT DEFAULT '#22c55e',
   created_by UUID REFERENCES public.users(id) ON DELETE SET NULL,
   created_at TIMESTAMPTZ DEFAULT NOW() NOT NULL
 );
+
+-- Project followers receive notifications when new project events are added
+CREATE TABLE IF NOT EXISTS public.project_followers (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  project_id UUID NOT NULL REFERENCES public.projects(id) ON DELETE CASCADE,
+  user_id UUID NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
+  notify_new_events BOOLEAN DEFAULT TRUE NOT NULL,
+  created_at TIMESTAMPTZ DEFAULT NOW() NOT NULL,
+  UNIQUE(project_id, user_id)
+);
+
+-- Event sign-ups let people subscribe to updates for one event
+CREATE TABLE IF NOT EXISTS public.event_signups (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  event_id UUID NOT NULL,
+  event_source TEXT NOT NULL CHECK (event_source IN ('project','community')),
+  user_id UUID NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
+  notify_updates BOOLEAN DEFAULT TRUE NOT NULL,
+  created_at TIMESTAMPTZ DEFAULT NOW() NOT NULL,
+  UNIQUE(event_source, event_id, user_id)
+);
+
+-- Area and event-type notification preferences
+CREATE TABLE IF NOT EXISTS public.notification_preferences (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  user_id UUID NOT NULL REFERENCES public.users(id) ON DELETE CASCADE UNIQUE,
+  area_label TEXT DEFAULT 'Māngere' NOT NULL,
+  latitude DOUBLE PRECISION DEFAULT -37.0 NOT NULL,
+  longitude DOUBLE PRECISION DEFAULT 174.8 NOT NULL,
+  radius_km DOUBLE PRECISION DEFAULT 10 NOT NULL CHECK (radius_km > 0),
+  event_types TEXT[] DEFAULT ARRAY['planting']::TEXT[] NOT NULL,
+  enabled BOOLEAN DEFAULT TRUE NOT NULL,
+  created_at TIMESTAMPTZ DEFAULT NOW() NOT NULL,
+  updated_at TIMESTAMPTZ DEFAULT NOW() NOT NULL
+);
+
+-- In-app notification inbox populated by database triggers
+CREATE TABLE IF NOT EXISTS public.user_notifications (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  user_id UUID NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
+  notification_type TEXT DEFAULT 'new_event' NOT NULL CHECK (notification_type IN ('new_event','event_update')),
+  title TEXT NOT NULL,
+  body TEXT,
+  event_id UUID,
+  event_source TEXT CHECK (event_source IN ('project','community')),
+  project_id UUID REFERENCES public.projects(id) ON DELETE CASCADE,
+  read_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ DEFAULT NOW() NOT NULL,
+  UNIQUE(user_id, event_source, event_id, notification_type)
+);
+
+-- Keep existing databases aligned with the current event map fields
+ALTER TABLE public.community_events ADD COLUMN IF NOT EXISTS latitude DOUBLE PRECISION;
+ALTER TABLE public.community_events ADD COLUMN IF NOT EXISTS longitude DOUBLE PRECISION;
 
 -- Global statistics (single row, updated via triggers)
 CREATE TABLE IF NOT EXISTS public.statistics (
@@ -113,6 +169,12 @@ CREATE INDEX IF NOT EXISTS idx_project_images_project_id ON public.project_image
 CREATE INDEX IF NOT EXISTS idx_project_events_project_id ON public.project_events(project_id);
 CREATE INDEX IF NOT EXISTS idx_project_events_start_date ON public.project_events(start_date);
 CREATE INDEX IF NOT EXISTS idx_community_events_start_date ON public.community_events(start_date);
+CREATE INDEX IF NOT EXISTS idx_project_followers_project_id ON public.project_followers(project_id);
+CREATE INDEX IF NOT EXISTS idx_project_followers_user_id ON public.project_followers(user_id);
+CREATE INDEX IF NOT EXISTS idx_event_signups_event ON public.event_signups(event_source, event_id);
+CREATE INDEX IF NOT EXISTS idx_event_signups_user_id ON public.event_signups(user_id);
+CREATE INDEX IF NOT EXISTS idx_notification_preferences_user_id ON public.notification_preferences(user_id);
+CREATE INDEX IF NOT EXISTS idx_user_notifications_user_id ON public.user_notifications(user_id, read_at, created_at DESC);
 
 -- ============================================================
 -- FUNCTIONS & TRIGGERS
@@ -151,6 +213,10 @@ CREATE OR REPLACE TRIGGER projects_updated_at
   BEFORE UPDATE ON public.projects
   FOR EACH ROW EXECUTE FUNCTION public.update_updated_at();
 
+CREATE OR REPLACE TRIGGER notification_preferences_updated_at
+  BEFORE UPDATE ON public.notification_preferences
+  FOR EACH ROW EXECUTE FUNCTION public.update_updated_at();
+
 -- Recompute global statistics when projects change
 CREATE OR REPLACE FUNCTION public.refresh_statistics()
 RETURNS TRIGGER AS $$
@@ -168,6 +234,180 @@ CREATE OR REPLACE TRIGGER projects_stats_refresh
   AFTER INSERT OR UPDATE OR DELETE ON public.projects
   FOR EACH STATEMENT EXECUTE FUNCTION public.refresh_statistics();
 
+-- Distance helper for area-based notifications. Uses kilometres.
+CREATE OR REPLACE FUNCTION public.distance_km(
+  lat1 DOUBLE PRECISION,
+  lon1 DOUBLE PRECISION,
+  lat2 DOUBLE PRECISION,
+  lon2 DOUBLE PRECISION
+)
+RETURNS DOUBLE PRECISION AS $$
+  SELECT 6371 * acos(
+    LEAST(1, GREATEST(-1,
+      sin(radians(lat1)) * sin(radians(lat2)) +
+      cos(radians(lat1)) * cos(radians(lat2)) * cos(radians(lon2 - lon1))
+    ))
+  );
+$$ LANGUAGE SQL IMMUTABLE;
+
+CREATE OR REPLACE FUNCTION public.notify_project_event_subscribers()
+RETURNS TRIGGER AS $$
+DECLARE
+  project_row public.projects%ROWTYPE;
+BEGIN
+  SELECT * INTO project_row FROM public.projects WHERE id = NEW.project_id;
+
+  INSERT INTO public.user_notifications (
+    user_id, notification_type, title, body, event_id, event_source, project_id
+  )
+  SELECT
+    pf.user_id,
+    'new_event',
+    NEW.title,
+    COALESCE(project_row.name, 'Project') || ' added a new ' || NEW.event_type || ' event.',
+    NEW.id,
+    'project',
+    NEW.project_id
+  FROM public.project_followers pf
+  WHERE pf.project_id = NEW.project_id
+    AND pf.notify_new_events = TRUE
+    AND pf.user_id IS DISTINCT FROM NEW.created_by
+  ON CONFLICT DO NOTHING;
+
+  INSERT INTO public.user_notifications (
+    user_id, notification_type, title, body, event_id, event_source, project_id
+  )
+  SELECT
+    np.user_id,
+    'new_event',
+    NEW.title,
+    COALESCE(project_row.name, 'Project') || ' has a new ' || NEW.event_type || ' event near ' || np.area_label || '.',
+    NEW.id,
+    'project',
+    NEW.project_id
+  FROM public.notification_preferences np
+  WHERE np.enabled = TRUE
+    AND (cardinality(np.event_types) = 0 OR NEW.event_type = ANY(np.event_types))
+    AND public.distance_km(np.latitude, np.longitude, project_row.latitude, project_row.longitude) <= np.radius_km
+    AND np.user_id IS DISTINCT FROM NEW.created_by
+  ON CONFLICT DO NOTHING;
+
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+CREATE OR REPLACE FUNCTION public.notify_community_event_subscribers()
+RETURNS TRIGGER AS $$
+BEGIN
+  IF NEW.latitude IS NULL OR NEW.longitude IS NULL THEN
+    RETURN NEW;
+  END IF;
+
+  INSERT INTO public.user_notifications (
+    user_id, notification_type, title, body, event_id, event_source
+  )
+  SELECT
+    np.user_id,
+    'new_event',
+    NEW.title,
+    'New ' || NEW.event_type || ' event near ' || np.area_label || COALESCE(': ' || NEW.location, '.'),
+    NEW.id,
+    'community'
+  FROM public.notification_preferences np
+  WHERE np.enabled = TRUE
+    AND (cardinality(np.event_types) = 0 OR NEW.event_type = ANY(np.event_types))
+    AND public.distance_km(np.latitude, np.longitude, NEW.latitude, NEW.longitude) <= np.radius_km
+    AND np.user_id IS DISTINCT FROM NEW.created_by
+  ON CONFLICT DO NOTHING;
+
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+CREATE OR REPLACE FUNCTION public.notify_project_event_signups_on_update()
+RETURNS TRIGGER AS $$
+BEGIN
+  IF OLD.title IS NOT DISTINCT FROM NEW.title
+    AND OLD.description IS NOT DISTINCT FROM NEW.description
+    AND OLD.start_date IS NOT DISTINCT FROM NEW.start_date
+    AND OLD.end_date IS NOT DISTINCT FROM NEW.end_date
+    AND OLD.all_day IS NOT DISTINCT FROM NEW.all_day
+  THEN
+    RETURN NEW;
+  END IF;
+
+  INSERT INTO public.user_notifications (
+    user_id, notification_type, title, body, event_id, event_source, project_id
+  )
+  SELECT
+    es.user_id,
+    'event_update',
+    NEW.title,
+    'An event you signed up for was updated.',
+    NEW.id,
+    'project',
+    NEW.project_id
+  FROM public.event_signups es
+  WHERE es.event_source = 'project'
+    AND es.event_id = NEW.id
+    AND es.notify_updates = TRUE
+    AND es.user_id IS DISTINCT FROM NEW.created_by
+  ON CONFLICT DO NOTHING;
+
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+CREATE OR REPLACE FUNCTION public.notify_community_event_signups_on_update()
+RETURNS TRIGGER AS $$
+BEGIN
+  IF OLD.title IS NOT DISTINCT FROM NEW.title
+    AND OLD.description IS NOT DISTINCT FROM NEW.description
+    AND OLD.location IS NOT DISTINCT FROM NEW.location
+    AND OLD.start_date IS NOT DISTINCT FROM NEW.start_date
+    AND OLD.end_date IS NOT DISTINCT FROM NEW.end_date
+    AND OLD.all_day IS NOT DISTINCT FROM NEW.all_day
+  THEN
+    RETURN NEW;
+  END IF;
+
+  INSERT INTO public.user_notifications (
+    user_id, notification_type, title, body, event_id, event_source
+  )
+  SELECT
+    es.user_id,
+    'event_update',
+    NEW.title,
+    'An event you signed up for was updated.',
+    NEW.id,
+    'community'
+  FROM public.event_signups es
+  WHERE es.event_source = 'community'
+    AND es.event_id = NEW.id
+    AND es.notify_updates = TRUE
+    AND es.user_id IS DISTINCT FROM NEW.created_by
+  ON CONFLICT DO NOTHING;
+
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+CREATE OR REPLACE TRIGGER project_event_insert_notifications
+  AFTER INSERT ON public.project_events
+  FOR EACH ROW EXECUTE FUNCTION public.notify_project_event_subscribers();
+
+CREATE OR REPLACE TRIGGER community_event_insert_notifications
+  AFTER INSERT ON public.community_events
+  FOR EACH ROW EXECUTE FUNCTION public.notify_community_event_subscribers();
+
+CREATE OR REPLACE TRIGGER project_event_update_notifications
+  AFTER UPDATE ON public.project_events
+  FOR EACH ROW EXECUTE FUNCTION public.notify_project_event_signups_on_update();
+
+CREATE OR REPLACE TRIGGER community_event_update_notifications
+  AFTER UPDATE ON public.community_events
+  FOR EACH ROW EXECUTE FUNCTION public.notify_community_event_signups_on_update();
+
 -- ============================================================
 -- ROW LEVEL SECURITY
 -- ============================================================
@@ -177,6 +417,10 @@ ALTER TABLE public.project_images ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.project_stories ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.project_events ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.community_events ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.project_followers ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.event_signups ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.notification_preferences ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.user_notifications ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.statistics ENABLE ROW LEVEL SECURITY;
 
 -- Users
@@ -212,6 +456,29 @@ CREATE POLICY "CommunityEvents: auth insert"    ON public.community_events FOR I
 CREATE POLICY "CommunityEvents: creator update" ON public.community_events FOR UPDATE USING (auth.uid() = created_by);
 CREATE POLICY "CommunityEvents: creator delete" ON public.community_events FOR DELETE USING (auth.uid() = created_by);
 
+-- Project followers
+CREATE POLICY "ProjectFollowers: public read" ON public.project_followers FOR SELECT USING (true);
+CREATE POLICY "ProjectFollowers: own insert" ON public.project_followers FOR INSERT WITH CHECK (auth.uid() = user_id);
+CREATE POLICY "ProjectFollowers: own update" ON public.project_followers FOR UPDATE USING (auth.uid() = user_id);
+CREATE POLICY "ProjectFollowers: own delete" ON public.project_followers FOR DELETE USING (auth.uid() = user_id);
+
+-- Event sign-ups
+CREATE POLICY "EventSignups: public read" ON public.event_signups FOR SELECT USING (true);
+CREATE POLICY "EventSignups: own insert" ON public.event_signups FOR INSERT WITH CHECK (auth.uid() = user_id);
+CREATE POLICY "EventSignups: own update" ON public.event_signups FOR UPDATE USING (auth.uid() = user_id);
+CREATE POLICY "EventSignups: own delete" ON public.event_signups FOR DELETE USING (auth.uid() = user_id);
+
+-- Notification preferences
+CREATE POLICY "NotificationPreferences: own read" ON public.notification_preferences FOR SELECT USING (auth.uid() = user_id);
+CREATE POLICY "NotificationPreferences: own insert" ON public.notification_preferences FOR INSERT WITH CHECK (auth.uid() = user_id);
+CREATE POLICY "NotificationPreferences: own update" ON public.notification_preferences FOR UPDATE USING (auth.uid() = user_id);
+CREATE POLICY "NotificationPreferences: own delete" ON public.notification_preferences FOR DELETE USING (auth.uid() = user_id);
+
+-- User notifications
+CREATE POLICY "UserNotifications: own read" ON public.user_notifications FOR SELECT USING (auth.uid() = user_id);
+CREATE POLICY "UserNotifications: own update" ON public.user_notifications FOR UPDATE USING (auth.uid() = user_id);
+CREATE POLICY "UserNotifications: own delete" ON public.user_notifications FOR DELETE USING (auth.uid() = user_id);
+
 -- Statistics
 CREATE POLICY "Statistics: public read" ON public.statistics FOR SELECT USING (true);
 
@@ -246,7 +513,7 @@ DO $$
 DECLARE
   tbl TEXT;
 BEGIN
-  FOREACH tbl IN ARRAY ARRAY['projects','project_images','project_events','community_events','statistics']
+  FOREACH tbl IN ARRAY ARRAY['projects','project_images','project_events','community_events','project_followers','event_signups','notification_preferences','user_notifications','statistics']
   LOOP
     IF NOT EXISTS (
       SELECT 1 FROM pg_publication_tables

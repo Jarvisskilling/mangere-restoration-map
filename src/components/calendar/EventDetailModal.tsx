@@ -1,10 +1,17 @@
 'use client'
 
+import { useEffect, useState } from 'react'
 import Modal from '@/components/ui/Modal'
 import Button from '@/components/ui/Button'
-import { MapPin, Clock } from 'lucide-react'
+import { CalendarCheck, Clock, MapPin, Users } from 'lucide-react'
+import {
+  fetchEventSignupState,
+  followEvent,
+  unfollowEvent,
+} from '@/services/notificationService'
 import type { CommunityEvent } from '@/types'
 import { EVENT_TYPE_COLORS } from '@/types'
+import toast from 'react-hot-toast'
 
 interface EventDetailModalProps {
   event: CommunityEvent | null
@@ -15,7 +22,48 @@ interface EventDetailModalProps {
 }
 
 export default function EventDetailModal({ event, onClose, userId, isAuthenticated, onEdit }: EventDetailModalProps) {
+  const [signupCount, setSignupCount] = useState(0)
+  const [signedUp, setSignedUp] = useState(false)
+  const [savingSignup, setSavingSignup] = useState(false)
+
+  useEffect(() => {
+    if (!event) return
+    let alive = true
+    fetchEventSignupState('community', event.id, userId)
+      .then(state => {
+        if (!alive) return
+        setSignupCount(state.count)
+        setSignedUp(state.signedUp)
+      })
+      .catch(() => {})
+
+    return () => { alive = false }
+  }, [event, userId])
+
   if (!event) return null
+
+  const handleSignup = async () => {
+    if (savingSignup) return
+
+    setSavingSignup(true)
+    try {
+      if (signedUp) {
+        await unfollowEvent('community', event.id, userId)
+        setSignedUp(false)
+        setSignupCount(count => Math.max(0, count - 1))
+        toast.success(userId ? 'Removed from event' : 'Unfollowed on this device')
+      } else {
+        const mode = await followEvent('community', event.id, userId)
+        setSignedUp(true)
+        setSignupCount(count => count + 1)
+        toast.success(mode === 'account' ? 'Following event' : 'Following on this device')
+      }
+    } catch {
+      toast.error('Failed to update follow')
+    } finally {
+      setSavingSignup(false)
+    }
+  }
 
   return (
     <Modal open={!!event} onClose={onClose} size="sm">
@@ -59,8 +107,22 @@ export default function EventDetailModal({ event, onClose, userId, isAuthenticat
           </p>
         )}
 
-        <div className="mt-5 flex items-center justify-end gap-3">
+        <div className="liquid-glass-card mt-5 flex items-center gap-2 rounded-2xl px-3 py-2 text-xs text-[#183225]/55">
+          <Users className="h-3.5 w-3.5 text-[#183225]/35" />
+          <span>{signupCount} following</span>
+        </div>
+
+        <div className="mt-5 flex flex-wrap items-center justify-end gap-3">
           <Button variant="ghost" size="sm" onClick={onClose}>Close</Button>
+          <Button
+            variant={signedUp ? 'secondary' : 'primary'}
+            size="sm"
+            onClick={handleSignup}
+            loading={savingSignup}
+          >
+            <CalendarCheck className="h-3.5 w-3.5" />
+            {signedUp ? 'Following' : 'Follow'}
+          </Button>
           {isAuthenticated && event.created_by === userId && onEdit && (
             <Button variant="primary" size="sm" onClick={() => { onClose(); onEdit(event) }}>
               Edit event

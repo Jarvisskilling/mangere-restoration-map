@@ -32,7 +32,6 @@
     "uuid": "^11.0.3"
   },
   "devDependencies": {
-    "@netlify/plugin-nextjs": "^5.15.11",
     "@types/leaflet": "^1.9.14",
     "@types/node": "^20",
     "@types/react": "^19",

@@ -371,14 +371,18 @@ export default function ProjectPanel({
   return (
     <>
       {/* Backdrop */}
-      <div className="fixed inset-0 z-[1400] animate-fade-in" onClick={onClose}
-        style={{ background: 'rgba(31,47,34,0.18)', backdropFilter: 'blur(8px)' }} />
+      <div
+        className="fixed inset-0 z-[1400] flex items-end justify-center p-3 animate-fade-in sm:items-center sm:p-4"
+        onClick={onClose}
+      >
+        <div className="absolute inset-0 bg-[#1f2f22]/24 backdrop-blur-md" />
+      </div>
 
       {/* Panel */}
-      <div className="friendly-project-panel liquid-glass-panel fixed right-0 top-0 bottom-0 z-[1500] w-full sm:w-[540px] flex flex-col overflow-y-auto animate-slide-in-right">
+      <div className="friendly-project-panel liquid-glass-surface fixed bottom-3 left-3 right-3 z-[1500] max-h-[92vh] overflow-y-auto rounded-[24px] animate-fade-up sm:bottom-auto sm:left-1/2 sm:right-auto sm:top-1/2 sm:w-[min(760px,calc(100vw-32px))] sm:-translate-x-1/2 sm:-translate-y-1/2 sm:rounded-[28px]">
 
         {/* ── HEADER ── */}
-        <div className="sticky top-0 z-10 border-b border-white/40 bg-[#fffaf1]/54 px-6 pt-7 pb-5 shadow-[0_12px_28px_rgba(68,79,58,0.06)] backdrop-blur-2xl">
+        <div className="sticky top-0 z-10 border-b border-white/45 bg-white/24 px-5 py-4 shadow-[0_12px_28px_rgba(68,79,58,0.06)] backdrop-blur-xl sm:px-6">
           <div className="flex items-start justify-between gap-4">
             <div className="flex-1 min-w-0 relative">
               <input
@@ -388,7 +392,7 @@ export default function ProjectPanel({
                 onBlur={handleSaveName}
                 onKeyDown={e => { if (e.key === 'Enter') e.currentTarget.blur() }}
                 readOnly={!isOwner}
-                className="w-full bg-transparent text-[22px] font-semibold tracking-tight text-white outline-none placeholder-white/10 leading-snug border-b border-transparent focus:border-white/10 transition-colors pb-0.5"
+                className="w-full bg-transparent text-xl font-semibold tracking-tight text-white outline-none placeholder-white/10 leading-snug border-b border-transparent focus:border-white/10 transition-colors pb-0.5 sm:text-[22px]"
                 placeholder="Site name…"
               />
               <div className="flex items-center gap-2 mt-2.5">
@@ -442,7 +446,7 @@ export default function ProjectPanel({
         </div>
 
         {/* ── SITE TYPE ── */}
-        <div className="px-6 pb-6">
+        <div className="px-5 pt-5 pb-5 sm:px-6">
           <SectionLabel>Site type</SectionLabel>
           <div className="flex flex-wrap gap-2">
             {(Object.keys(PROJECT_TYPE_LABELS) as ProjectType[]).map(type => {
@@ -468,9 +472,9 @@ export default function ProjectPanel({
         </div>
 
         {/* ── STATS ── */}
-        <div className="px-6 pb-7">
+        <div className="px-5 pb-6 sm:px-6">
           <SectionLabel>Impact</SectionLabel>
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
             <StatCard icon={<TreePine className="h-4 w-4" />} label="Trees planted" value={trees}
               editable={isOwner} accent="rgba(74,222,128,0.07)"
               onChange={v => handleStatUpdate('trees_planted', v)} />
@@ -488,10 +492,10 @@ export default function ProjectPanel({
         </div>
 
         {/* Divider */}
-        <div className="mx-6 h-px bg-[#5c6f55]/12 mb-7" />
+        <div className="mx-5 h-px bg-[#5c6f55]/12 mb-6 sm:mx-6" />
 
         {/* ── OVERVIEW ── */}
-        <div className="px-6 pb-7">
+        <div className="px-5 pb-6 sm:px-6">
           <SectionLabel>Overview</SectionLabel>
           <div className="space-y-4">
             <div className="relative">
@@ -537,10 +541,10 @@ export default function ProjectPanel({
         </div>
 
         {/* Divider */}
-        <div className="mx-6 h-px bg-[#5c6f55]/12 mb-7" />
+        <div className="mx-5 h-px bg-[#5c6f55]/12 mb-6 sm:mx-6" />
 
         {/* ── EVENTS ── */}
-        <div className="px-6 pb-7">
+        <div className="px-5 pb-6 sm:px-6">
           <div className="flex items-center justify-between mb-4">
             <SectionLabel>Events</SectionLabel>
             {isOwner && (
@@ -608,10 +612,10 @@ export default function ProjectPanel({
         </div>
 
         {/* Divider */}
-        <div className="mx-6 h-px bg-[#5c6f55]/12 mb-7" />
+        <div className="mx-5 h-px bg-[#5c6f55]/12 mb-6 sm:mx-6" />
 
         {/* ── OBSERVATIONS ── */}
-        <div className="px-6 pb-7">
+        <div className="px-5 pb-6 sm:px-6">
           <div className="flex items-center justify-between mb-4">
             <SectionLabel>Observations</SectionLabel>
             {isAuthenticated && (
@@ -685,10 +689,10 @@ export default function ProjectPanel({
         </div>
 
         {/* Divider */}
-        <div className="mx-6 h-px bg-[#5c6f55]/12 mb-7" />
+        <div className="mx-5 h-px bg-[#5c6f55]/12 mb-6 sm:mx-6" />
 
         {/* ── STORY ── */}
-        <div className="px-6 pb-10">
+        <div className="px-5 pb-8 sm:px-6">
           <SectionLabel>Story</SectionLabel>
           <p className="text-[10px] text-white/25 mb-3 leading-relaxed">
             Anyone in the community can contribute to this shared story.

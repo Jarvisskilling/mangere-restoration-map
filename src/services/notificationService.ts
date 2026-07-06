@@ -1,6 +1,8 @@
 import { createClient } from '@/lib/supabase/client'
 import type {
   EventSignupSummary,
+  EventSignup,
+  EventMessage,
   EventSource,
   EventType,
   NotificationPreference,
@@ -203,6 +205,92 @@ export async function signUpForEvent(
     }, { onConflict: 'event_source,event_id,user_id' })
 
   if (error) throw error
+}
+
+export async function fetchEventSignups(
+  eventSource: EventSource,
+  eventId: string
+): Promise<EventSignup[]> {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const supabase = createClient() as any
+  const { data, error } = await supabase
+    .from('event_signups')
+    .select('*')
+    .eq('event_source', eventSource)
+    .eq('event_id', eventId)
+    .order('created_at', { ascending: false })
+
+  if (error) throw error
+  return data ?? []
+}
+
+export async function fetchEventMessages(
+  eventSource: EventSource,
+  eventId: string
+): Promise<EventMessage[]> {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const supabase = createClient() as any
+  const { data, error } = await supabase
+    .from('event_messages')
+    .select('*, author:users(id,email,full_name,avatar_url,created_at)')
+    .eq('event_source', eventSource)
+    .eq('event_id', eventId)
+    .order('created_at', { ascending: true })
+    .limit(100)
+
+  if (error) throw error
+  return data ?? []
+}
+
+export async function sendEventMessage(
+  eventSource: EventSource,
+  eventId: string,
+  userId: string,
+  message: string
+): Promise<EventMessage> {
+  const body = message.trim()
+  if (!body) throw new Error('Message cannot be empty')
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const supabase = createClient() as any
+  const { data, error } = await supabase
+    .from('event_messages')
+    .insert({
+      event_source: eventSource,
+      event_id: eventId,
+      user_id: userId,
+      message: body,
+    })
+    .select('*, author:users(id,email,full_name,avatar_url,created_at)')
+    .single()
+
+  if (error) throw error
+  return data
+}
+
+export function subscribeEventMessages(
+  eventSource: EventSource,
+  eventId: string,
+  onChange: () => void
+): () => void {
+  const supabase = createClient()
+  const channel = supabase
+    .channel(`event-messages:${eventSource}:${eventId}`)
+    .on(
+      'postgres_changes',
+      {
+        event: '*',
+        schema: 'public',
+        table: 'event_messages',
+        filter: `event_id=eq.${eventId}`,
+      },
+      onChange
+    )
+    .subscribe()
+
+  return () => {
+    void supabase.removeChannel(channel)
+  }
 }
 
 export async function leaveEvent(

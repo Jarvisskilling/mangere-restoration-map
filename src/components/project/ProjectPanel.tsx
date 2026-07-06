@@ -4,6 +4,7 @@ import { useState, useEffect, useRef, useCallback } from 'react'
 import {
   X, Check, Trash2, Bell, BellOff, CalendarCheck,
   Users, TreePine, Clock, MapPin, Eye, Plus, ChevronDown, Pencil,
+  MessageCircle, Send, Mail,
 } from 'lucide-react'
 import FullCalendar from '@fullcalendar/react'
 import dayGridPlugin from '@fullcalendar/daygrid'
@@ -32,11 +33,15 @@ import {
   unfollowGuestProject,
 } from '@/services/followerService'
 import {
+  fetchEventMessages,
+  fetchEventSignups,
   fetchEventSignupSummaries,
   followEvent,
+  sendEventMessage,
+  subscribeEventMessages,
   unfollowEvent,
 } from '@/services/notificationService'
-import type { EventSignupSummary, Project, ProjectEvent, ProjectObservation, EventType, ProjectType } from '@/types'
+import type { EventMessage, EventSignup, EventSignupSummary, Project, ProjectEvent, ProjectObservation, EventType, ProjectType } from '@/types'
 import { EVENT_TYPE_COLORS, PROJECT_TYPE_LABELS, PROJECT_TYPE_COLORS, PROJECT_TYPE_DEFAULT_NAMES } from '@/types'
 import Button from '@/components/ui/Button'
 import Modal from '@/components/ui/Modal'
@@ -147,6 +152,7 @@ export default function ProjectPanel({
   const [eventForm, setEventForm] = useState<EventForm>(EMPTY_EVENT)
   const [selectedDate, setSelectedDate] = useState('')
   const [editingEventId, setEditingEventId] = useState<string | null>(null)
+  const [chatEvent, setChatEvent] = useState<ProjectEvent | null>(null)
   const [savingEvent, setSavingEvent] = useState(false)
   const [showObsForm, setShowObsForm] = useState(false)
   const [obsContent, setObsContent] = useState('')
@@ -566,6 +572,7 @@ export default function ProjectPanel({
                   signup={eventSignupSummaries[evt.id]}
                   onEdit={openEditEvent}
                   onToggleSignup={handleEventSignup}
+                  onOpenChat={setChatEvent}
                 />
               ))}
 
@@ -588,6 +595,7 @@ export default function ProjectPanel({
                           signup={eventSignupSummaries[evt.id]}
                           onEdit={openEditEvent}
                           onToggleSignup={handleEventSignup}
+                          onOpenChat={setChatEvent}
                           past
                         />
                       ))}
@@ -775,6 +783,14 @@ export default function ProjectPanel({
           </div>
         </div>
       </Modal>
+
+      <ProjectEventChatModal
+        event={chatEvent}
+        signup={chatEvent ? eventSignupSummaries[chatEvent.id] : undefined}
+        isOrganiser={!!chatEvent && chatEvent.created_by === userId}
+        userId={userId}
+        onClose={() => setChatEvent(null)}
+      />
     </>
   )
 }
@@ -786,6 +802,7 @@ function EventRow({
   signup,
   onEdit,
   onToggleSignup,
+  onOpenChat,
   past,
 }: {
   evt: ProjectEvent
@@ -793,6 +810,7 @@ function EventRow({
   signup?: EventSignupSummary
   onEdit: (e: ProjectEvent) => void
   onToggleSignup: (e: ProjectEvent) => void
+  onOpenChat: (e: ProjectEvent) => void
   past?: boolean
 }) {
   const color = evt.color ?? EVENT_TYPE_COLORS[evt.event_type]
@@ -832,6 +850,16 @@ function EventRow({
           {signedUp ? 'Following' : 'Follow'}
         </button>
       )}
+      {!past && signedUp && (
+        <button
+          type="button"
+          onClick={() => onOpenChat(evt)}
+          aria-label="Open event chat"
+          className="liquid-glass-control flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-white/25 transition-[background-color,border-color,color,transform] duration-150 ease-out hover:text-white/55 active:scale-[0.97]"
+        >
+          <MessageCircle className="h-3 w-3" />
+        </button>
+      )}
       {isOwner && !past && (
         <button
           type="button"
@@ -843,5 +871,156 @@ function EventRow({
         </button>
       )}
     </div>
+  )
+}
+
+function ProjectEventChatModal({
+  event,
+  signup,
+  isOrganiser,
+  userId,
+  onClose,
+}: {
+  event: ProjectEvent | null
+  signup?: EventSignupSummary
+  isOrganiser: boolean
+  userId?: string
+  onClose: () => void
+}) {
+  const [signups, setSignups] = useState<EventSignup[]>([])
+  const [messages, setMessages] = useState<EventMessage[]>([])
+  const [draft, setDraft] = useState('')
+  const [sending, setSending] = useState(false)
+  const signedUp = signup?.signedUp ?? false
+
+  useEffect(() => {
+    if (!event || !isOrganiser) {
+      setSignups([])
+      return
+    }
+
+    let alive = true
+    fetchEventSignups('project', event.id)
+      .then(rows => { if (alive) setSignups(rows) })
+      .catch(() => {})
+
+    return () => { alive = false }
+  }, [event, isOrganiser, signup?.count])
+
+  useEffect(() => {
+    if (!event || !userId || !signedUp) {
+      setMessages([])
+      return
+    }
+
+    let alive = true
+    const load = () => {
+      fetchEventMessages('project', event.id)
+        .then(rows => { if (alive) setMessages(rows) })
+        .catch(() => {})
+    }
+
+    load()
+    const unsubscribe = subscribeEventMessages('project', event.id, load)
+    return () => {
+      alive = false
+      unsubscribe()
+    }
+  }, [event, userId, signedUp])
+
+  const post = async () => {
+    if (!event || !userId || !draft.trim() || sending) return
+    setSending(true)
+    try {
+      const sent = await sendEventMessage('project', event.id, userId, draft)
+      setMessages(prev => [...prev, sent])
+      setDraft('')
+    } catch {
+      toast.error('Failed to post update')
+    } finally {
+      setSending(false)
+    }
+  }
+
+  return (
+    <Modal open={!!event} onClose={onClose} title={event?.title ?? 'Event chat'} size="lg">
+      {!event ? null : (
+        <div className="space-y-4">
+          {isOrganiser && (
+            <div className="liquid-glass-card rounded-2xl p-3">
+              <div className="mb-2 flex items-center justify-between text-xs font-medium text-[#183225]/60">
+                <span>People keen to come</span>
+                <span>{signups.length}</span>
+              </div>
+              <div className="max-h-40 space-y-2 overflow-y-auto pr-1">
+                {signups.length === 0 && <p className="text-xs text-[#183225]/40">No followers yet.</p>}
+                {signups.map(item => (
+                  <div key={item.id} className="flex items-center gap-2 rounded-xl bg-white/35 px-2.5 py-2">
+                    <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-green-500/15 text-xs font-semibold text-green-700">
+                      {(item.attendee_name || item.attendee_email || 'A').charAt(0).toUpperCase()}
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-xs font-medium text-[#183225]/70">{item.attendee_name || 'Unnamed follower'}</p>
+                      {item.attendee_email && (
+                        <a href={`mailto:${item.attendee_email}`} className="mt-0.5 flex items-center gap-1 truncate text-[10px] text-[#183225]/40">
+                          <Mail className="h-3 w-3 shrink-0" />
+                          {item.attendee_email}
+                        </a>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          <div className="liquid-glass-card rounded-2xl p-3">
+            <div className="mb-3 flex items-center gap-2 text-xs font-medium text-[#183225]/60">
+              <MessageCircle className="h-3.5 w-3.5" />
+              Group chat
+            </div>
+            {!userId && <p className="rounded-xl bg-white/35 px-3 py-2 text-xs text-[#183225]/45">Sign in and follow this event to join the chat.</p>}
+            {userId && !signedUp && <p className="rounded-xl bg-white/35 px-3 py-2 text-xs text-[#183225]/45">Follow this event to join the chat.</p>}
+            {userId && signedUp && (
+              <>
+                <div className="max-h-56 space-y-2 overflow-y-auto pr-1">
+                  {messages.length === 0 && <p className="rounded-xl bg-white/35 px-3 py-2 text-xs text-[#183225]/45">No updates yet.</p>}
+                  {messages.map(message => {
+                    const mine = message.user_id === userId
+                    return (
+                      <div key={message.id} className={`flex flex-col ${mine ? 'items-end' : 'items-start'}`}>
+                        <div className="mb-1 px-1 text-[10px] text-[#183225]/35">
+                          {message.author?.full_name || message.author?.email || 'Follower'}
+                        </div>
+                        <div className={`max-w-[85%] rounded-2xl px-3 py-2 text-xs leading-relaxed ${mine ? 'bg-green-600 text-white' : 'bg-white/45 text-[#183225]/65'}`}>
+                          {message.message}
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+                <div className="mt-3 flex gap-2">
+                  <input
+                    value={draft}
+                    onChange={e => setDraft(e.target.value)}
+                    onKeyDown={e => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault()
+                        void post()
+                      }
+                    }}
+                    placeholder="Post an update..."
+                    className="min-w-0 flex-1 rounded-xl border border-white/40 bg-white/45 px-3 py-2 text-xs text-[#183225] outline-none placeholder:text-[#183225]/35 focus:border-green-500/45"
+                  />
+                  <Button size="sm" onClick={post} loading={sending} disabled={!draft.trim()}>
+                    <Send className="h-3.5 w-3.5" />
+                  </Button>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      )}
+    </Modal>
   )
 }

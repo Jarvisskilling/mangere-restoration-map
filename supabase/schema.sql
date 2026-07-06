@@ -108,9 +108,22 @@ CREATE TABLE IF NOT EXISTS public.event_signups (
   event_id UUID NOT NULL,
   event_source TEXT NOT NULL CHECK (event_source IN ('project','community')),
   user_id UUID NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
+  attendee_name TEXT,
+  attendee_email TEXT,
+  attendee_avatar_url TEXT,
   notify_updates BOOLEAN DEFAULT TRUE NOT NULL,
   created_at TIMESTAMPTZ DEFAULT NOW() NOT NULL,
   UNIQUE(event_source, event_id, user_id)
+);
+
+-- Event group chat messages. Anyone signed up to the event can post.
+CREATE TABLE IF NOT EXISTS public.event_messages (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  event_id UUID NOT NULL,
+  event_source TEXT NOT NULL CHECK (event_source IN ('project','community')),
+  user_id UUID NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
+  message TEXT NOT NULL CHECK (char_length(trim(message)) > 0 AND char_length(message) <= 2000),
+  created_at TIMESTAMPTZ DEFAULT NOW() NOT NULL
 );
 
 -- Area and event-type notification preferences
@@ -145,6 +158,9 @@ CREATE TABLE IF NOT EXISTS public.user_notifications (
 -- Keep existing databases aligned with the current event map fields
 ALTER TABLE public.community_events ADD COLUMN IF NOT EXISTS latitude DOUBLE PRECISION;
 ALTER TABLE public.community_events ADD COLUMN IF NOT EXISTS longitude DOUBLE PRECISION;
+ALTER TABLE public.event_signups ADD COLUMN IF NOT EXISTS attendee_name TEXT;
+ALTER TABLE public.event_signups ADD COLUMN IF NOT EXISTS attendee_email TEXT;
+ALTER TABLE public.event_signups ADD COLUMN IF NOT EXISTS attendee_avatar_url TEXT;
 
 -- Global statistics (single row, updated via triggers)
 CREATE TABLE IF NOT EXISTS public.statistics (
@@ -173,6 +189,8 @@ CREATE INDEX IF NOT EXISTS idx_project_followers_project_id ON public.project_fo
 CREATE INDEX IF NOT EXISTS idx_project_followers_user_id ON public.project_followers(user_id);
 CREATE INDEX IF NOT EXISTS idx_event_signups_event ON public.event_signups(event_source, event_id);
 CREATE INDEX IF NOT EXISTS idx_event_signups_user_id ON public.event_signups(user_id);
+CREATE INDEX IF NOT EXISTS idx_event_messages_event ON public.event_messages(event_source, event_id, created_at);
+CREATE INDEX IF NOT EXISTS idx_event_messages_user_id ON public.event_messages(user_id);
 CREATE INDEX IF NOT EXISTS idx_notification_preferences_user_id ON public.notification_preferences(user_id);
 CREATE INDEX IF NOT EXISTS idx_user_notifications_user_id ON public.user_notifications(user_id, read_at, created_at DESC);
 
@@ -233,6 +251,52 @@ $$ LANGUAGE plpgsql SECURITY DEFINER;
 CREATE OR REPLACE TRIGGER projects_stats_refresh
   AFTER INSERT OR UPDATE OR DELETE ON public.projects
   FOR EACH STATEMENT EXECUTE FUNCTION public.refresh_statistics();
+
+-- Store the user's public signup details at the moment they follow an event.
+CREATE OR REPLACE FUNCTION public.populate_event_signup_snapshot()
+RETURNS TRIGGER AS $$
+DECLARE
+  user_row public.users%ROWTYPE;
+BEGIN
+  SELECT * INTO user_row FROM public.users WHERE id = NEW.user_id;
+
+  NEW.attendee_name = COALESCE(NULLIF(NEW.attendee_name, ''), user_row.full_name);
+  NEW.attendee_email = COALESCE(NULLIF(NEW.attendee_email, ''), user_row.email);
+  NEW.attendee_avatar_url = COALESCE(NULLIF(NEW.attendee_avatar_url, ''), user_row.avatar_url);
+
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+CREATE OR REPLACE TRIGGER event_signups_populate_snapshot
+  BEFORE INSERT OR UPDATE ON public.event_signups
+  FOR EACH ROW EXECUTE FUNCTION public.populate_event_signup_snapshot();
+
+CREATE OR REPLACE FUNCTION public.is_event_follower(source TEXT, target_event_id UUID, target_user_id UUID)
+RETURNS BOOLEAN AS $$
+  SELECT EXISTS (
+    SELECT 1
+    FROM public.event_signups es
+    WHERE es.event_source = source
+      AND es.event_id = target_event_id
+      AND es.user_id = target_user_id
+  );
+$$ LANGUAGE SQL SECURITY DEFINER STABLE;
+
+CREATE OR REPLACE FUNCTION public.is_event_organiser(source TEXT, target_event_id UUID, target_user_id UUID)
+RETURNS BOOLEAN AS $$
+  SELECT CASE
+    WHEN source = 'project' THEN EXISTS (
+      SELECT 1 FROM public.project_events pe
+      WHERE pe.id = target_event_id AND pe.created_by = target_user_id
+    )
+    WHEN source = 'community' THEN EXISTS (
+      SELECT 1 FROM public.community_events ce
+      WHERE ce.id = target_event_id AND ce.created_by = target_user_id
+    )
+    ELSE FALSE
+  END;
+$$ LANGUAGE SQL SECURITY DEFINER STABLE;
 
 -- Distance helper for area-based notifications. Uses kilometres.
 CREATE OR REPLACE FUNCTION public.distance_km(
@@ -419,6 +483,7 @@ ALTER TABLE public.project_events ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.community_events ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.project_followers ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.event_signups ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.event_messages ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.notification_preferences ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.user_notifications ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.statistics ENABLE ROW LEVEL SECURITY;
@@ -468,6 +533,18 @@ CREATE POLICY "EventSignups: own insert" ON public.event_signups FOR INSERT WITH
 CREATE POLICY "EventSignups: own update" ON public.event_signups FOR UPDATE USING (auth.uid() = user_id);
 CREATE POLICY "EventSignups: own delete" ON public.event_signups FOR DELETE USING (auth.uid() = user_id);
 
+-- Event messages
+CREATE POLICY "EventMessages: follower or organiser read" ON public.event_messages
+  FOR SELECT USING (
+    public.is_event_follower(event_source, event_id, auth.uid())
+    OR public.is_event_organiser(event_source, event_id, auth.uid())
+  );
+CREATE POLICY "EventMessages: follower insert" ON public.event_messages
+  FOR INSERT WITH CHECK (
+    auth.uid() = user_id
+    AND public.is_event_follower(event_source, event_id, auth.uid())
+  );
+
 -- Notification preferences
 CREATE POLICY "NotificationPreferences: own read" ON public.notification_preferences FOR SELECT USING (auth.uid() = user_id);
 CREATE POLICY "NotificationPreferences: own insert" ON public.notification_preferences FOR INSERT WITH CHECK (auth.uid() = user_id);
@@ -513,7 +590,7 @@ DO $$
 DECLARE
   tbl TEXT;
 BEGIN
-  FOREACH tbl IN ARRAY ARRAY['projects','project_images','project_events','community_events','project_followers','event_signups','notification_preferences','user_notifications','statistics']
+  FOREACH tbl IN ARRAY ARRAY['projects','project_images','project_events','community_events','project_followers','event_signups','event_messages','notification_preferences','user_notifications','statistics']
   LOOP
     IF NOT EXISTS (
       SELECT 1 FROM pg_publication_tables

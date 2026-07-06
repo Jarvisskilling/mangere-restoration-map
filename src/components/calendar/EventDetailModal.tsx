@@ -3,13 +3,17 @@
 import { useEffect, useState } from 'react'
 import Modal from '@/components/ui/Modal'
 import Button from '@/components/ui/Button'
-import { CalendarCheck, Clock, MapPin, Users } from 'lucide-react'
+import { CalendarCheck, Clock, Mail, MapPin, MessageCircle, Send, Users } from 'lucide-react'
 import {
   fetchEventSignupState,
+  fetchEventSignups,
+  fetchEventMessages,
   followEvent,
+  sendEventMessage,
+  subscribeEventMessages,
   unfollowEvent,
 } from '@/services/notificationService'
-import type { CommunityEvent } from '@/types'
+import type { CommunityEvent, EventMessage, EventSignup } from '@/types'
 import { EVENT_TYPE_COLORS } from '@/types'
 import toast from 'react-hot-toast'
 
@@ -25,6 +29,10 @@ export default function EventDetailModal({ event, onClose, userId, isAuthenticat
   const [signupCount, setSignupCount] = useState(0)
   const [signedUp, setSignedUp] = useState(false)
   const [savingSignup, setSavingSignup] = useState(false)
+  const [signups, setSignups] = useState<EventSignup[]>([])
+  const [messages, setMessages] = useState<EventMessage[]>([])
+  const [messageDraft, setMessageDraft] = useState('')
+  const [sendingMessage, setSendingMessage] = useState(false)
 
   useEffect(() => {
     if (!event) return
@@ -39,6 +47,42 @@ export default function EventDetailModal({ event, onClose, userId, isAuthenticat
 
     return () => { alive = false }
   }, [event, userId])
+
+  useEffect(() => {
+    if (!event || event.created_by !== userId) {
+      setSignups([])
+      return
+    }
+
+    let alive = true
+    fetchEventSignups('community', event.id)
+      .then(rows => { if (alive) setSignups(rows) })
+      .catch(() => {})
+
+    return () => { alive = false }
+  }, [event, userId, signupCount])
+
+  useEffect(() => {
+    if (!event || !userId || !signedUp) {
+      setMessages([])
+      return
+    }
+
+    let alive = true
+    const loadMessages = () => {
+      fetchEventMessages('community', event.id)
+        .then(rows => { if (alive) setMessages(rows) })
+        .catch(() => {})
+    }
+
+    loadMessages()
+    const unsubscribe = subscribeEventMessages('community', event.id, loadMessages)
+
+    return () => {
+      alive = false
+      unsubscribe()
+    }
+  }, [event, userId, signedUp])
 
   if (!event) return null
 
@@ -64,6 +108,23 @@ export default function EventDetailModal({ event, onClose, userId, isAuthenticat
       setSavingSignup(false)
     }
   }
+
+  const handleSendMessage = async () => {
+    if (!event || !userId || !messageDraft.trim() || sendingMessage) return
+
+    setSendingMessage(true)
+    try {
+      const sent = await sendEventMessage('community', event.id, userId, messageDraft)
+      setMessages(items => [...items, sent])
+      setMessageDraft('')
+    } catch {
+      toast.error('Failed to post update')
+    } finally {
+      setSendingMessage(false)
+    }
+  }
+
+  const isOrganiser = isAuthenticated && event.created_by === userId
 
   return (
     <Modal open={!!event} onClose={onClose} size="sm">
@@ -110,6 +171,90 @@ export default function EventDetailModal({ event, onClose, userId, isAuthenticat
         <div className="liquid-glass-card mt-5 flex items-center gap-2 rounded-2xl px-3 py-2 text-xs text-[#183225]/55">
           <Users className="h-3.5 w-3.5 text-[#183225]/35" />
           <span>{signupCount} following</span>
+        </div>
+
+        {isOrganiser && (
+          <div className="liquid-glass-card mt-3 rounded-2xl p-3">
+            <div className="mb-2 flex items-center justify-between gap-2 text-xs font-medium text-[#183225]/60">
+              <span>People keen to come</span>
+              <span>{signups.length}</span>
+            </div>
+            <div className="max-h-36 space-y-2 overflow-y-auto pr-1">
+              {signups.length === 0 && (
+                <p className="text-xs text-[#183225]/40">No followers yet.</p>
+              )}
+              {signups.map(signup => (
+                <div key={signup.id} className="flex items-center gap-2 rounded-xl bg-white/35 px-2.5 py-2">
+                  <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-green-500/15 text-xs font-semibold text-green-700">
+                    {(signup.attendee_name || signup.attendee_email || 'A').charAt(0).toUpperCase()}
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-xs font-medium text-[#183225]/70">
+                      {signup.attendee_name || 'Unnamed follower'}
+                    </p>
+                    {signup.attendee_email && (
+                      <a href={`mailto:${signup.attendee_email}`} className="mt-0.5 flex items-center gap-1 truncate text-[10px] text-[#183225]/40">
+                        <Mail className="h-3 w-3 shrink-0" />
+                        {signup.attendee_email}
+                      </a>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        <div className="liquid-glass-card mt-3 rounded-2xl p-3">
+          <div className="mb-2 flex items-center gap-2 text-xs font-medium text-[#183225]/60">
+            <MessageCircle className="h-3.5 w-3.5" />
+            Event group chat
+          </div>
+          {!userId && (
+            <p className="rounded-xl bg-white/35 px-3 py-2 text-xs text-[#183225]/45">Sign in and follow this event to join the chat.</p>
+          )}
+          {userId && !signedUp && (
+            <p className="rounded-xl bg-white/35 px-3 py-2 text-xs text-[#183225]/45">Follow this event to join the chat.</p>
+          )}
+          {userId && signedUp && (
+            <>
+              <div className="max-h-40 space-y-2 overflow-y-auto pr-1">
+                {messages.length === 0 && (
+                  <p className="rounded-xl bg-white/35 px-3 py-2 text-xs text-[#183225]/45">No updates yet.</p>
+                )}
+                {messages.map(message => {
+                  const mine = message.user_id === userId
+                  return (
+                    <div key={message.id} className={`flex flex-col ${mine ? 'items-end' : 'items-start'}`}>
+                      <div className="mb-1 px-1 text-[10px] text-[#183225]/35">
+                        {message.author?.full_name || message.author?.email || 'Follower'}
+                      </div>
+                      <div className={`max-w-[85%] rounded-2xl px-3 py-2 text-xs leading-relaxed ${mine ? 'bg-green-600 text-white' : 'bg-white/45 text-[#183225]/65'}`}>
+                        {message.message}
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+              <div className="mt-3 flex gap-2">
+                <input
+                  value={messageDraft}
+                  onChange={e => setMessageDraft(e.target.value)}
+                  onKeyDown={e => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault()
+                      void handleSendMessage()
+                    }
+                  }}
+                  placeholder="Post an update..."
+                  className="min-w-0 flex-1 rounded-xl border border-white/40 bg-white/45 px-3 py-2 text-xs text-[#183225] outline-none placeholder:text-[#183225]/35 focus:border-green-500/45"
+                />
+                <Button size="sm" onClick={handleSendMessage} loading={sendingMessage} disabled={!messageDraft.trim()}>
+                  <Send className="h-3.5 w-3.5" />
+                </Button>
+              </div>
+            </>
+          )}
         </div>
 
         <div className="mt-5 flex flex-wrap items-center justify-end gap-3">

@@ -52,6 +52,9 @@ export interface EventSignup {
   event_id: string
   event_source: EventSource
   user_id: string
+  attendee_name?: string | null
+  attendee_email?: string | null
+  attendee_avatar_url?: string | null
   notify_updates: boolean
   created_at: string
 }
@@ -59,6 +62,16 @@ export interface EventSignup {
 export interface EventSignupSummary {
   count: number
   signedUp: boolean
+}
+
+export interface EventMessage {
+  id: string
+  event_id: string
+  event_source: EventSource
+  user_id: string
+  message: string
+  created_at: string
+  author?: User | null
 }
 
 export interface NotificationPreference {
